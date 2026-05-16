@@ -151,7 +151,7 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 	history := make([]model.Message, len(messages))
 	copy(history, messages)
 
-	const maxRounds = 10
+	const maxRounds = 6
 	totalToolCalls := 0
 
 	for round := 0; round < maxRounds; round++ {
@@ -225,9 +225,9 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 			if err != nil || !result.Success {
 				errMsg := "failed"
 				if result != nil {
-					errMsg = result.Error
+					errMsg = truncateOutput(result.Error, 2048)
 				} else if err != nil {
-					errMsg = err.Error()
+					errMsg = truncateOutput(err.Error(), 2048)
 				}
 				history = append(history, model.Message{
 					Role:       model.RoleTool,
@@ -238,7 +238,7 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 			} else {
 				history = append(history, model.Message{
 					Role:       model.RoleTool,
-					Content:    result.Output,
+					Content:    truncateOutput(result.Output, 8192),
 					Name:       tc.Name,
 					ToolCallID: tc.ID,
 				})
@@ -309,6 +309,14 @@ func showToolCall(tc llm.ToolCall) {
 		argStr += fmt.Sprintf("%s=%s ", k, s)
 	}
 	fmt.Printf("    → %s(%s)\n", tc.Name, strings.TrimSpace(argStr))
+}
+
+func truncateOutput(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	half := maxLen / 2
+	return s[:half] + fmt.Sprintf("\n... (truncated %d bytes)\n", len(s)-maxLen) + s[len(s)-half:]
 }
 
 func truncateText(s string, maxLen int) string {
