@@ -345,9 +345,9 @@ func DetectProvider(model string, cfg ModelConfig) ProviderKind {
 
 | # | 文件/任务 | 状态 | 说明 |
 |---|-----------|------|------|
-| 0.1 | `go.mod` | ⬜ | Go module 初始化 |
-| 0.2 | `Makefile` | ⬜ | build/test/lint/install 目标 |
-| 0.3 | `README.md` | ⬜ | 已有，可能需要更新 |
+| 0.1 | `go.mod` | ✅ | Go module 初始化 (go 1.22) |
+| 0.2 | `Makefile` | ✅ | build/test/lint/install/run 目标 |
+| 0.3 | `README.md` | ✅ | 已存在（父目录），无需更新 |
 
 ### Phase 1: 基础设施（L1 + 数据模型）
 
