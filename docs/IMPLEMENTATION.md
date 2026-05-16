@@ -413,11 +413,13 @@ func DetectProvider(model string, cfg ModelConfig) ProviderKind {
 
 | # | 测试范围 | 状态 | 说明 |
 |---|---------|------|------|
-| 8.1 | `pkg/model/` | ⬜ | 纯单元测试 |
-| 8.2 | `internal/scheduler/` | ⬜ | DAG 算法测试 |
-| 8.3 | `internal/tool/` | ⬜ | 工具执行测试 |
-| 8.4 | `internal/provider/` | ⬜ | Mock LLM 测试（httptest.Server） |
-| 8.5 | `internal/engine/` | ⬜ | 集成测试 |
+| 8.1 | `pkg/model/` | ⏸️ | 纯数据结构，暂缓 |
+| 8.2 | `internal/scheduler/` | ✅ | DAG: 5 tests (no cycle, cycle detection, unknown dep, ReadyTasks, multiple roots) |
+| 8.3 | `internal/tool/` | ✅ | Tools: 7 tests (read/write/edit/shell/registry) |
+| 8.4 | `internal/security/` | ✅ | Policy: 4 tests (strict/auto-low/auto-all/critical block) |
+| 8.5 | `internal/event/` | ✅ | Event bus: 3 tests (pub/sub, multiple subscribers, type isolation) |
+| 8.6 | `internal/provider/` | ⏸️ | Mock LLM test — needs httptest.Server, deferred |
+| 8.7 | `internal/engine/` | ⏸️ | Integration test — needs running LLM, deferred |
 
 ### Future (v0.2.0+)
 
