@@ -195,6 +195,7 @@ func runChat(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("CrabCoder coding agent  model=%s  session=%s  (type /exit to quit)\n", cfg.Model.Model, truncateID(sessionID))
+	fmt.Println("  /help for commands")
 	fmt.Println()
 
 	scanner := bufio.NewScanner(os.Stdin)
@@ -214,7 +215,7 @@ func runChat(cmd *cobra.Command, args []string) error {
 			fmt.Println(initProject())
 			continue
 		}
-		if strings.HasPrefix(input, "/") {
+		if len(input) > 0 && input[0] == '/' {
 			showSlashHelp(input)
 			continue
 		}
@@ -287,23 +288,20 @@ func init() {
 }
 
 func showSlashHelp(input string) {
+	out := os.Stdout
 	if input == "/help" || input == "/" {
-		// Echo the input
-		fmt.Printf("\n❯ /\n")
-		// Separator line
-		fmt.Println(strings.Repeat("─", 80))
-		// List all commands
+		fmt.Fprintf(out, "\n❯ /\n")
+		fmt.Fprintln(out, strings.Repeat("─", 80))
 		for _, c := range slashCommands {
 			tag := ""
 			if c.tag != "" {
 				tag = " (" + c.tag + ")"
 			}
-			fmt.Printf("  \033[1m%-30s\033[0m %s%s\n", c.cmd, c.desc, tag)
+			fmt.Fprintf(out, "  \033[1m%-30s\033[0m %s%s\n", c.cmd, c.desc, tag)
 		}
-		fmt.Println()
+		fmt.Fprintln(out)
 		return
 	}
-	// Prefix matching for partial input
 	var matches []struct {
 		cmd  string
 		desc string
@@ -315,18 +313,18 @@ func showSlashHelp(input string) {
 		}
 	}
 	if len(matches) > 0 {
-		fmt.Printf("\n❯ %s\n", input)
-		fmt.Println(strings.Repeat("─", 80))
+		fmt.Fprintf(out, "\n❯ %s\n", input)
+		fmt.Fprintln(out, strings.Repeat("─", 80))
 		for _, m := range matches {
 			tag := ""
 			if m.tag != "" {
 				tag = " (" + m.tag + ")"
 			}
-			fmt.Printf("  \033[1m%-30s\033[0m %s%s\n", m.cmd, m.desc, tag)
+			fmt.Fprintf(out, "  \033[1m%-30s\033[0m %s%s\n", m.cmd, m.desc, tag)
 		}
-		fmt.Println()
+		fmt.Fprintln(out)
 	} else {
-		fmt.Printf("\n  未知命令 %q — 输入 /help 查看可用命令。\n", input)
+		fmt.Fprintf(out, "\n  未知命令 %q — 输入 /help 查看可用命令。\n", input)
 	}
 }
 
