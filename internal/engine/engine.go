@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/crabcoder/crabcoder/internal/event"
@@ -164,15 +165,8 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 		// No tool calls — LLM is done, return response
 		if len(resp.ToolCalls) == 0 {
 			e.session.Transition(SessionCompleted)
-			text := resp.Content
-			if resp.Reasoning != "" {
-				text = "[Thinking]\n" + resp.Reasoning + "\n\n[Response]\n" + resp.Content
-			}
-			return &Response{
-				Text:          text,
-				TasksExecuted: totalToolCalls,
-				SessionID:     requestID,
-			}, nil
+			showLLMResponse(resp, "")
+			return &Response{Text: resp.Content, TasksExecuted: totalToolCalls, SessionID: requestID}, nil
 		}
 
 		// Phase 2: Send full definitions only for the tools the LLM selected
@@ -206,11 +200,14 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 		if len(execCalls) == 0 {
 			// LLM didn't produce tool calls with full defs, return text
 			e.session.Transition(SessionCompleted)
-			return &Response{
-				Text:          detailResp.Content,
-				TasksExecuted: totalToolCalls,
-				SessionID:     requestID,
-			}, nil
+			showLLMResponse(detailResp, "")
+			return &Response{Text: detailResp.Content, TasksExecuted: totalToolCalls, SessionID: requestID}, nil
+		}
+
+		// Show the response and tool calls
+		showLLMResponse(detailResp, "Tool calls:")
+		for _, tc := range execCalls {
+			showToolCall(tc)
 		}
 
 		// Append assistant message (with tool calls) to history
@@ -317,6 +314,44 @@ func (e *engineImpl) Health() error {
 
 func (e *engineImpl) Session() *Session {
 	return e.session
+}
+
+var totalTokensUsed int
+
+func showLLMResponse(resp *llm.ChatResponse, label string) {
+	info := ""
+	if resp.TotalTokens > 0 {
+		totalTokensUsed += resp.TotalTokens
+		info = fmt.Sprintf("(%d tok · %dk total)", resp.TotalTokens, totalTokensUsed/1000)
+	}
+	if resp.Reasoning != "" {
+		fmt.Printf("\n  %s [Thinking] %s\n", info, truncateText(resp.Reasoning, 300))
+		return
+	}
+	if resp.Content != "" && label != "" {
+		fmt.Printf("  %s %s: %s\n", info, label, truncateText(resp.Content, 500))
+	} else if resp.Content != "" {
+		fmt.Printf("  %s %s\n", info, truncateText(resp.Content, 500))
+	}
+}
+
+func showToolCall(tc llm.ToolCall) {
+	argStr := ""
+	for k, v := range tc.Args {
+		s := fmt.Sprintf("%v", v)
+		if len(s) > 40 {
+			s = s[:40] + "..."
+		}
+		argStr += fmt.Sprintf("%s=%s ", k, s)
+	}
+	fmt.Printf("    → %s(%s)\n", tc.Name, strings.TrimSpace(argStr))
+}
+
+func truncateText(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
 
 func promptUserApproval(name string, args map[string]any, decision security.ApprovalDecision) bool {

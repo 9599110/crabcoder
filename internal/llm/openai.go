@@ -92,8 +92,15 @@ type openAIProp struct {
 	Items       *openAIProp `json:"items,omitempty"`
 }
 
+type openAIUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+}
+
 type openAIResponse struct {
 	Choices []openAIChoice `json:"choices"`
+	Usage   openAIUsage    `json:"usage,omitempty"`
 	Error   *openAIError   `json:"error,omitempty"`
 }
 
@@ -240,7 +247,10 @@ func (p *OpenAIProvider) buildRequest(messages []model.Message, opts *ChatOption
 }
 
 func (p *OpenAIProvider) toResponse(or openAIResponse) *ChatResponse {
-	resp := &ChatResponse{}
+	resp := &ChatResponse{
+		PromptTokens: or.Usage.PromptTokens,
+		TotalTokens:  or.Usage.TotalTokens,
+	}
 	if len(or.Choices) == 0 {
 		return resp
 	}
