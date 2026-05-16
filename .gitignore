@@ -1,5 +1,6 @@
-# Claude Code
-.claude/
+# Project local settings
+.project/
+.local/
 
 # IDE
 .idea/
