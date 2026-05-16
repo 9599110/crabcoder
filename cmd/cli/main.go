@@ -202,9 +202,11 @@ func runChat(cmd *cobra.Command, args []string) error {
 		}
 
 		messages = append(messages, model.Message{Role: model.RoleUser, Content: input})
-		fmt.Print("Thinking...")
+		done := make(chan struct{})
+		go showThinking(done)
 		resp, err := eng.ProcessChat(context.Background(), messages)
-		fmt.Print("\r            \r")
+		close(done)
+		fmt.Print("\r                    \r")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			continue
@@ -240,6 +242,21 @@ func resolveDataDir(raw string) string {
 		}
 	}
 	return raw
+}
+
+func showThinking(done <-chan struct{}) {
+	frames := []string{"🦀 Thinking   ", "🦀 Thinking.  ", "🦀 Thinking.. ", "🦀 Thinking..."}
+	i := 0
+	for {
+		select {
+		case <-done:
+			return
+		default:
+			fmt.Print("\r" + frames[i])
+			i = (i + 1) % len(frames)
+			time.Sleep(300 * time.Millisecond)
+		}
+	}
 }
 
 func truncateID(id string) string {

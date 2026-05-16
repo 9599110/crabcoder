@@ -19,6 +19,7 @@ type ToolCall struct {
 type Message struct {
 	Role       MessageRole
 	Content    string
+	Reasoning  string     // thinking/reasoning content (DeepSeek v4, etc.)
 	Name       string     // tool name (for tool role)
 	ToolCallID string     // tool call correlation (for tool role)
 	ToolCalls  []ToolCall // tool calls (for assistant role)

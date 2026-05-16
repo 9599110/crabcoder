@@ -42,10 +42,11 @@ func (p *OpenAIProvider) GetTools() []model.ToolDefinition {
 // --- Request/Response types ---
 
 type openAIMessage struct {
-	Role       string         `json:"role"`
-	Content    string         `json:"content,omitempty"`
-	ToolCallID string         `json:"tool_call_id,omitempty"`
-	ToolCalls  []openAIToolCall `json:"tool_calls,omitempty"`
+	Role             string          `json:"role"`
+	Content          string          `json:"content,omitempty"`
+	ReasoningContent string          `json:"reasoning_content,omitempty"`
+	ToolCallID       string          `json:"tool_call_id,omitempty"`
+	ToolCalls        []openAIToolCall `json:"tool_calls,omitempty"`
 }
 
 type openAIToolCall struct {
@@ -179,9 +180,10 @@ func (p *OpenAIProvider) buildRequest(messages []model.Message, opts *ChatOption
 	var openAIMsgs []openAIMessage
 	for _, msg := range messages {
 		om := openAIMessage{
-			Role:       string(msg.Role),
-			Content:    msg.Content,
-			ToolCallID: msg.ToolCallID,
+			Role:             string(msg.Role),
+			Content:          msg.Content,
+			ReasoningContent: msg.Reasoning,
+			ToolCallID:       msg.ToolCallID,
 		}
 		// Serialize tool calls for assistant messages
 		if msg.Role == model.RoleAssistant && len(msg.ToolCalls) > 0 {
