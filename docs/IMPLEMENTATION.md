@@ -364,10 +364,10 @@ func DetectProvider(model string, cfg ModelConfig) ProviderKind {
 
 | # | 文件 | 状态 | 说明 |
 |---|------|------|------|
-| 2.1 | `internal/provider/provider.go` | ⬜ | LLMProvider 接口 + ChatResponse 类型 |
-| 2.2 | `internal/provider/factory.go` | ⬜ | 自动检测 + 工厂方法 |
-| 2.3 | `internal/provider/openai.go` | ⬜ | OpenAI Chat Completions API |
-| 2.4 | `internal/provider/anthropic.go` | ⬜ | Anthropic Messages API |
+| 2.1 | `internal/provider/provider.go` | ✅ | LLMProvider 接口 (Chat/StreamChat) + ChatResponse/ToolCall/StreamChunk |
+| 2.2 | `internal/provider/factory.go` | ✅ | NewFromConfig: auto-detect + env + config fallback |
+| 2.3 | `internal/provider/openai.go` | ✅ | OpenAI Chat Completions (v1/chat/completions + SSE streaming) |
+| 2.4 | `internal/provider/anthropic.go` | ✅ | Anthropic Messages (v1/messages + SSE streaming) |
 
 ### Phase 3: 工具系统（L3 执行层）
 
