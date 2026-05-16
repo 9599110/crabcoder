@@ -209,6 +209,10 @@ func runChat(cmd *cobra.Command, args []string) error {
 		if input == "/exit" || input == "/quit" {
 			break
 		}
+		if input == "/init" {
+			fmt.Println(initProject())
+			continue
+		}
 
 		messages = append(messages, model.Message{Role: model.RoleUser, Content: input})
 		done := make(chan struct{})
