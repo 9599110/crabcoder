@@ -60,7 +60,7 @@ var chatCmd = &cobra.Command{
 
 func init() {
 	rootCmd.PersistentFlags().StringP("model", "m", "", "Model to use (e.g. claude-sonnet-4-6, deepseek-chat)")
-	chatCmd.Flags().StringVarP(&resumeID, "resume", "r", "", "Resume a previous session by ID")
+	chatCmd.Flags().StringVarP(&resumeID, "resume", "r", "", "Resume a session by ID, prefix, or \"latest\"")
 	rootCmd.AddCommand(askCmd)
 	rootCmd.AddCommand(chatCmd)
 }
@@ -182,10 +182,14 @@ func runChat(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(messages) == 0 {
-		sessionID = fmt.Sprintf("chat-%d", time.Now().UnixNano())
+		sessionID = engine.GenerateSessionID()
+		sysContent := "You are an interactive agent that helps users with software engineering tasks. You MUST use tools (read_file, write_file, edit_file, bash, grep, glob) to read actual code before making changes. Never guess or fabricate code. Always read files first, then edit. Reply in the same language the user uses (Chinese → Chinese, English → English)."
+		if ctx := loadProjectContext(); ctx != "" {
+			sysContent += "\n\n<project_context>\n" + ctx + "\n</project_context>"
+		}
 		messages = append(messages, model.Message{
 			Role:    model.RoleSystem,
-			Content: "You are an interactive agent that helps users with software engineering tasks. You MUST use tools (read_file, write_file, edit_file, bash, grep, glob) to read actual code before making changes. Never guess or fabricate code. Always read files first, then edit. Reply in the same language the user uses (Chinese → Chinese, English → English).",
+			Content: sysContent,
 		})
 	}
 
@@ -237,6 +241,33 @@ func runChat(cmd *cobra.Command, args []string) error {
 	})
 
 	return nil
+}
+
+// loadProjectContext reads project context files from the current directory.
+// It checks for CLAUDE.md, GEMINI.md, AGENTS.md, and .crabcoder/CONTEXT.md.
+func loadProjectContext() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	candidates := []string{
+		filepath.Join(cwd, "CLAUDE.md"),
+		filepath.Join(cwd, "GEMINI.md"),
+		filepath.Join(cwd, "AGENTS.md"),
+		filepath.Join(cwd, ".crabcoder", "CONTEXT.md"),
+	}
+	for _, p := range candidates {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		content := string(data)
+		if len(content) > 8000 {
+			content = content[:8000] + "\n... (truncated)"
+		}
+		return content
+	}
+	return ""
 }
 
 func resolveDataDir(raw string) string {

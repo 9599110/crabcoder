@@ -87,7 +87,7 @@ func (e *engineImpl) EnableWatchdog(cfg *config.TimeoutConfig) context.CancelFun
 func (e *engineImpl) ProcessRequest(ctx context.Context, req *Request) (*Response, error) {
 	requestID := req.SessionID
 	if requestID == "" {
-		requestID = fmt.Sprintf("req-%d", time.Now().UnixNano())
+		requestID = "req-" + GenerateSessionID()
 	}
 	e.session.Start(requestID)
 
@@ -141,7 +141,7 @@ func (e *engineImpl) ProcessRequest(ctx context.Context, req *Request) (*Respons
 
 // ProcessChat — Path B: Interactive Agent (chat command)
 func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) (*Response, error) {
-	requestID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
+	requestID := "chat-" + GenerateSessionID()
 	e.session.Start(requestID)
 
 	// Compact tool definitions: types+required, stripped descriptions
