@@ -176,8 +176,14 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 		}
 
 		// Phase 2: Send full definitions only for the tools the LLM selected
+		// Deduplicate by name (LLM may select the same tool multiple times)
+		seen := make(map[string]bool)
 		var fullDefs []model.ToolDefinition
 		for _, tc := range resp.ToolCalls {
+			if seen[tc.Name] {
+				continue
+			}
+			seen[tc.Name] = true
 			if exec := e.tools.Get(tc.Name); exec != nil {
 				fullDefs = append(fullDefs, exec.GetDefinition())
 			}
