@@ -180,7 +180,19 @@ func (p *AnthropicProvider) buildRequest(messages []model.Message, opts *ChatOpt
 		case model.RoleUser:
 			am.Content = []anthropicBlock{{Type: "text", Text: msg.Content}}
 		case model.RoleAssistant:
-			am.Content = []anthropicBlock{{Type: "text", Text: msg.Content}}
+			if len(msg.ToolCalls) > 0 {
+				for _, tc := range msg.ToolCalls {
+					am.Content = append(am.Content, anthropicBlock{
+						Type:  "tool_use",
+						ID:    tc.ID,
+						Name:  tc.Name,
+						Input: tc.Args,
+					})
+				}
+			}
+			if msg.Content != "" {
+				am.Content = append(am.Content, anthropicBlock{Type: "text", Text: msg.Content})
+			}
 		case model.RoleTool:
 			am.Content = []anthropicBlock{{
 				Type:      "tool_result",

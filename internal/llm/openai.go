@@ -182,6 +182,20 @@ func (p *OpenAIProvider) buildRequest(messages []model.Message, opts *ChatOption
 			Content:    msg.Content,
 			ToolCallID: msg.ToolCallID,
 		}
+		// Serialize tool calls for assistant messages
+		if msg.Role == model.RoleAssistant && len(msg.ToolCalls) > 0 {
+			for _, tc := range msg.ToolCalls {
+				argsJSON, _ := json.Marshal(tc.Args)
+				om.ToolCalls = append(om.ToolCalls, openAIToolCall{
+					ID:   tc.ID,
+					Type: "function",
+					Function: openAIFunction{
+						Name:      tc.Name,
+						Arguments: string(argsJSON),
+					},
+				})
+			}
+		}
 		openAIMsgs = append(openAIMsgs, om)
 	}
 

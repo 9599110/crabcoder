@@ -170,10 +170,18 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 		}
 
 		// Append assistant message (with tool calls) to history
-		history = append(history, model.Message{
+		assistantMsg := model.Message{
 			Role:    model.RoleAssistant,
 			Content: resp.Content,
-		})
+		}
+		for _, tc := range resp.ToolCalls {
+			assistantMsg.ToolCalls = append(assistantMsg.ToolCalls, model.ToolCall{
+				ID:   tc.ID,
+				Name: tc.Name,
+				Args: tc.Args,
+			})
+		}
+		history = append(history, assistantMsg)
 
 		// Execute tool calls and collect results
 		totalToolCalls += len(resp.ToolCalls)
