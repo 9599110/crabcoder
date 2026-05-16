@@ -14,6 +14,7 @@ type ToolCall struct {
 
 type ChatResponse struct {
 	Content   string
+	Reasoning string // thinking/reasoning content (DeepSeek v4, etc.)
 	ToolCalls []ToolCall
 }
 

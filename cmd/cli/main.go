@@ -202,7 +202,9 @@ func runChat(cmd *cobra.Command, args []string) error {
 		}
 
 		messages = append(messages, model.Message{Role: model.RoleUser, Content: input})
+		fmt.Print("Thinking...")
 		resp, err := eng.ProcessChat(context.Background(), messages)
+		fmt.Print("\r            \r")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			continue

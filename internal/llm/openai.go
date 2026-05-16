@@ -100,8 +100,9 @@ type openAIChoice struct {
 }
 
 type openAIRespMessage struct {
-	Content   string          `json:"content"`
-	ToolCalls []openAIToolCall `json:"tool_calls"`
+	Content          string          `json:"content"`
+	ReasoningContent string          `json:"reasoning_content"`
+	ToolCalls        []openAIToolCall `json:"tool_calls"`
 }
 
 type openAIError struct {
@@ -242,6 +243,7 @@ func (p *OpenAIProvider) toResponse(or openAIResponse) *ChatResponse {
 	}
 	msg := or.Choices[0].Message
 	resp.Content = msg.Content
+	resp.Reasoning = msg.ReasoningContent
 	for _, tc := range msg.ToolCalls {
 		var args map[string]any
 		json.Unmarshal([]byte(tc.Function.Arguments), &args)

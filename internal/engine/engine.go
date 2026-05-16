@@ -162,8 +162,12 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 		// No tool calls — LLM is done, return response
 		if len(resp.ToolCalls) == 0 {
 			e.session.Transition(SessionCompleted)
+			text := resp.Content
+			if resp.Reasoning != "" {
+				text = "[Thinking]\n" + resp.Reasoning + "\n\n[Response]\n" + resp.Content
+			}
 			return &Response{
-				Text:          resp.Content,
+				Text:          text,
 				TasksExecuted: totalToolCalls,
 				SessionID:     requestID,
 			}, nil
