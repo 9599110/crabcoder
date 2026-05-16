@@ -2,7 +2,7 @@
 
 BUILD_DIR := bin
 MAIN_PATH := ./cmd/cli/
-BINARY := $(BUILD_DIR)/crabcoder
+BINARY := $(BUILD_DIR)/crab
 
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_TIME := $(shell date -u '+%Y-%m-%d_%H:%M:%S')
@@ -18,13 +18,13 @@ build:
 	$(GO) build $(GOFLAGS) -o $(BINARY) $(MAIN_PATH)
 
 build-linux:
-	GOOS=linux GOARCH=amd64 $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/crabcoder-linux-amd64 $(MAIN_PATH)
+	GOOS=linux GOARCH=amd64 $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/crab-linux-amd64 $(MAIN_PATH)
 
 build-darwin:
-	GOOS=darwin GOARCH=arm64 $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/crabcoder-darwin-arm64 $(MAIN_PATH)
+	GOOS=darwin GOARCH=arm64 $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/crab-darwin-arm64 $(MAIN_PATH)
 
 build-windows:
-	GOOS=windows GOARCH=amd64 $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/crabcoder-windows-amd64.exe $(MAIN_PATH)
+	GOOS=windows GOARCH=amd64 $(GO) build $(GOFLAGS) -o $(BUILD_DIR)/crab-windows-amd64.exe $(MAIN_PATH)
 
 test:
 	$(GO) test -v -race -cover ./...
