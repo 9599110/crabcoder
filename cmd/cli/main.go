@@ -216,6 +216,9 @@ func runChat(cmd *cobra.Command, args []string) error {
 			continue
 		}
 		if len(input) > 0 && input[0] == '/' {
+			// Debug: write to file AND stderr to confirm this code runs
+			os.WriteFile("/tmp/crab-slash.log", []byte(fmt.Sprintf("input=%q\n", input)), 0644)
+			fmt.Fprintln(os.Stderr, "\n[SLASH DETECTED]", input)
 			showSlashHelp(input)
 			continue
 		}
@@ -288,18 +291,17 @@ func init() {
 }
 
 func showSlashHelp(input string) {
-	out := os.Stdout
 	if input == "/help" || input == "/" {
-		fmt.Fprintf(out, "\n❯ /\n")
-		fmt.Fprintln(out, strings.Repeat("─", 80))
+		fmt.Fprintf(os.Stderr, "\n❯ /\n")
+		fmt.Fprintln(os.Stderr, strings.Repeat("─", 80))
 		for _, c := range slashCommands {
 			tag := ""
 			if c.tag != "" {
 				tag = " (" + c.tag + ")"
 			}
-			fmt.Fprintf(out, "  \033[1m%-30s\033[0m %s%s\n", c.cmd, c.desc, tag)
+			fmt.Fprintf(os.Stderr, "  \033[1m%-30s\033[0m %s%s\n", c.cmd, c.desc, tag)
 		}
-		fmt.Fprintln(out)
+		fmt.Fprintln(os.Stderr)
 		return
 	}
 	var matches []struct {
@@ -313,18 +315,18 @@ func showSlashHelp(input string) {
 		}
 	}
 	if len(matches) > 0 {
-		fmt.Fprintf(out, "\n❯ %s\n", input)
-		fmt.Fprintln(out, strings.Repeat("─", 80))
+		fmt.Fprintf(os.Stderr, "\n❯ %s\n", input)
+		fmt.Fprintln(os.Stderr, strings.Repeat("─", 80))
 		for _, m := range matches {
 			tag := ""
 			if m.tag != "" {
 				tag = " (" + m.tag + ")"
 			}
-			fmt.Fprintf(out, "  \033[1m%-30s\033[0m %s%s\n", m.cmd, m.desc, tag)
+			fmt.Fprintf(os.Stderr, "  \033[1m%-30s\033[0m %s%s\n", m.cmd, m.desc, tag)
 		}
-		fmt.Fprintln(out)
+		fmt.Fprintln(os.Stderr)
 	} else {
-		fmt.Fprintf(out, "\n  未知命令 %q — 输入 /help 查看可用命令。\n", input)
+		fmt.Fprintf(os.Stderr, "\n  未知命令 %q — 输入 /help 查看可用命令。\n", input)
 	}
 }
 
