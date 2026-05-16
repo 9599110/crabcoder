@@ -265,23 +265,16 @@ const (
 )
 
 // DetectProvider auto-detects the provider based on model name, environment, and prefix map.
+// Priority: explicit config → model prefix → env vars → defaults.
 func (c *Config) DetectProvider() ProviderKind {
 	// 1. Explicit provider in config
 	if c.Model.Provider != "" {
 		return ProviderKind(c.Model.Provider)
 	}
 
-	// 2. Check env vars
-	if os.Getenv("ANTHROPIC_API_KEY") != "" {
-		return ProviderAnthropic
-	}
-	if os.Getenv("OPENAI_API_KEY") != "" {
-		return ProviderOpenAI
-	}
-
-	// 3. Model prefix detection
+	// 2. Model prefix detection (model name takes priority over env vars)
 	model := strings.ToLower(c.Model.Model)
-	if kind, ok := c.ModelPrefixMap["model"]; ok {
+	if kind, ok := c.ModelPrefixMap[model]; ok {
 		return ProviderKind(kind)
 	}
 
@@ -296,6 +289,17 @@ func (c *Config) DetectProvider() ProviderKind {
 	}
 	if strings.HasPrefix(model, "llama") || strings.HasPrefix(model, "ollama") {
 		return ProviderOllama
+	}
+
+	// 3. Fallback: check env vars
+	if os.Getenv("DEEPSEEK_API_KEY") != "" {
+		return ProviderDeepSeek
+	}
+	if os.Getenv("ANTHROPIC_API_KEY") != "" {
+		return ProviderAnthropic
+	}
+	if os.Getenv("OPENAI_API_KEY") != "" {
+		return ProviderOpenAI
 	}
 
 	return ProviderAnthropic

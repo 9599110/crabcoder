@@ -36,10 +36,14 @@ func TestDetectProvider_Explicit(t *testing.T) {
 }
 
 func TestDetectProvider_AnthropicEnv(t *testing.T) {
+	os.Unsetenv("OPENAI_API_KEY")
+	os.Unsetenv("DEEPSEEK_API_KEY")
 	os.Setenv("ANTHROPIC_API_KEY", "test-key")
 	defer os.Unsetenv("ANTHROPIC_API_KEY")
 
 	cfg := DefaultConfig()
+	// Use a model name that doesn't match any known prefix so env var fallback kicks in
+	cfg.Model.Model = "unknown-model"
 	if got := cfg.DetectProvider(); got != ProviderAnthropic {
 		t.Errorf("expected anthropic from env, got %s", got)
 	}
@@ -47,10 +51,13 @@ func TestDetectProvider_AnthropicEnv(t *testing.T) {
 
 func TestDetectProvider_OpenAIEnv(t *testing.T) {
 	os.Unsetenv("ANTHROPIC_API_KEY")
+	os.Unsetenv("DEEPSEEK_API_KEY")
 	os.Setenv("OPENAI_API_KEY", "test-key")
 	defer os.Unsetenv("OPENAI_API_KEY")
 
 	cfg := DefaultConfig()
+	// Use a model name that doesn't match any known prefix so env var fallback kicks in
+	cfg.Model.Model = "unknown-model"
 	if got := cfg.DetectProvider(); got != ProviderOpenAI {
 		t.Errorf("expected openai from env, got %s", got)
 	}
