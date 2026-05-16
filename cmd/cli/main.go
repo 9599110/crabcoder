@@ -247,31 +247,21 @@ func runChat(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// loadProjectContext reads project context files from the current directory.
-// It checks for CLAUDE.md, GEMINI.md, AGENTS.md, and .crabcoder/CONTEXT.md.
+// loadProjectContext reads .crabcoder/CONTEXT.md from the current directory.
 func loadProjectContext() string {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return ""
 	}
-	candidates := []string{
-		filepath.Join(cwd, "CLAUDE.md"),
-		filepath.Join(cwd, "GEMINI.md"),
-		filepath.Join(cwd, "AGENTS.md"),
-		filepath.Join(cwd, ".crabcoder", "CONTEXT.md"),
+	data, err := os.ReadFile(filepath.Join(cwd, ".crabcoder", "CONTEXT.md"))
+	if err != nil {
+		return ""
 	}
-	for _, p := range candidates {
-		data, err := os.ReadFile(p)
-		if err != nil {
-			continue
-		}
-		content := string(data)
-		if len(content) > 8000 {
-			content = content[:8000] + "\n... (truncated)"
-		}
-		return content
+	content := string(data)
+	if len(content) > 8000 {
+		content = content[:8000] + "\n... (truncated)"
 	}
-	return ""
+	return content
 }
 
 func resolveDataDir(raw string) string {
