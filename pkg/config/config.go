@@ -183,14 +183,16 @@ func DefaultConfig() *Config {
 		Aliases: map[string]string{
 			"opus":   "claude-opus-4-6",
 			"sonnet": "claude-sonnet-4-6",
-			"haiku":  "claude-haiku-4-5-20251213",
+			"haiku":    "claude-haiku-4-5-20251213",
+			"deepseek": "deepseek-v4-pro",
 		},
 		ModelPrefixMap: map[string]string{
-			"claude": "anthropic",
-			"gpt":    "openai",
-			"grok":   "xai",
-			"ollama": "ollama",
-			"llama":  "ollama",
+			"claude":   "anthropic",
+			"gpt":      "openai",
+			"deepseek": "deepseek",
+			"grok":     "xai",
+			"ollama":   "ollama",
+			"llama":    "ollama",
 		},
 	}
 }
