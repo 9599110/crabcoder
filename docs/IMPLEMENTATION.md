@@ -373,10 +373,10 @@ func DetectProvider(model string, cfg ModelConfig) ProviderKind {
 
 | # | 文件 | 状态 | 说明 |
 |---|------|------|------|
-| 3.1 | `internal/tool/executor.go` | ⬜ | ToolExecutor 接口 + ToolResult |
-| 3.2 | `internal/tool/registry.go` | ⬜ | ToolRegistry（Register/Get/List） |
-| 3.3 | `internal/tool/file.go` | ⬜ | read_file, write_file, edit_file |
-| 3.4 | `internal/tool/shell.go` | ⬜ | bash |
+| 3.1 | `internal/tool/executor.go` | ✅ | Executor 接口 (Execute/Validate/Definition/RiskLevel) + RiskLevel 枚举 |
+| 3.2 | `internal/tool/registry.go` | ✅ | Registry (Register/Get/List/Definitions, sync.RWMutex) |
+| 3.3 | `internal/tool/file.go` | ✅ | ReadFileExecutor, WriteFileExecutor, EditFileExecutor |
+| 3.4 | `internal/tool/shell.go` | ✅ | ShellExecutor (bash with timeout) |
 
 ### Phase 4: 安全控制（L3 执行层）
 
