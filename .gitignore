@@ -1,3 +1,6 @@
+# Claude Code
+.claude/
+
 # IDE
 .idea/
 .vscode/
@@ -27,6 +30,21 @@ vendor/
 
 # Config (local overrides)
 .crabcoder/
+*.local.json
+*.local.yaml
+settings.local.json
+
+# Sensitive
+.env
+.env.*
+*.key
+*.pem
+
+# Go build artifacts
+*.prof
+*.coverprofile
+coverage.out
+__debug_bin*
 
 # OS
 .DS_Store
