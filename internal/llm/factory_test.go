@@ -47,7 +47,7 @@ func TestNewFromConfig_DeepSeek(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected *OpenAIProvider for DeepSeek, got %T", p)
 	}
-	if openaiProvider.baseURL != "https://api.deepseek.com" {
+	if openaiProvider.baseURL != "https://api.deepseek.com/v1" {
 		t.Errorf("expected DeepSeek base URL, got %s", openaiProvider.baseURL)
 	}
 }

@@ -50,7 +50,7 @@ func newSingleProvider(cfg *config.Config) (LLMProvider, error) {
 			baseURL = os.Getenv("DEEPSEEK_BASE_URL")
 		}
 		if baseURL == "" {
-			baseURL = "https://api.deepseek.com"
+			baseURL = "https://api.deepseek.com/v1"
 		}
 		return NewOpenAIProvider(apiKey, baseURL, model), nil
 
@@ -159,7 +159,7 @@ func buildFallbackProvider(cfg *config.Config, kind config.ProviderKind) (LLMPro
 			return nil, fmt.Errorf("no API key for %s", model)
 		}
 		if baseURL == "" {
-			baseURL = "https://api.deepseek.com"
+			baseURL = "https://api.deepseek.com/v1"
 		}
 		return NewOpenAIProvider(apiKey, baseURL, model), nil
 
