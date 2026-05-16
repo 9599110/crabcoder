@@ -407,7 +407,7 @@ func DetectProvider(model string, cfg ModelConfig) ProviderKind {
 
 | # | 文件 | 状态 | 说明 |
 |---|------|------|------|
-| 7.1 | `cmd/cli/main.go` | ⬜ | Cobra 入口，依赖装配，ask/chat 命令 |
+| 7.1 | `cmd/cli/main.go` | ✅ | Cobra CLI: ask (task decomposition), chat (REPL), dependency wiring |
 
 ### Phase 8: 测试
 
