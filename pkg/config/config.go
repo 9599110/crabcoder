@@ -36,7 +36,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		Model: ModelConfig{
 			Provider: "",
-			Model:    "sonnet",
+			Model:    "claude-sonnet-4-6",
 		},
 		Security: SecurityConfig{
 			Mode: "strict",
@@ -46,9 +46,9 @@ func DefaultConfig() *Config {
 			Timeout: 300,
 		},
 		Aliases: map[string]string{
-			"opus":   "opus-4-6",
-			"sonnet": "sonnet-4-6",
-			"haiku":  "haiku-4-5",
+			"opus":   "claude-opus-4-6",
+			"sonnet": "claude-sonnet-4-6",
+			"haiku":  "claude-haiku-4-5-20251213",
 		},
 	}
 }
@@ -121,7 +121,7 @@ func (c *Config) DetectProvider() ProviderKind {
 		return ProviderKind(c.Model.Provider)
 	}
 
-	// Provider detection: env vars take priority over model name
+	// Provider detection: check env vars, then model name prefix
 	if os.Getenv("ANTHROPIC_API_KEY") != "" {
 		return ProviderAnthropic
 	}
@@ -130,6 +130,9 @@ func (c *Config) DetectProvider() ProviderKind {
 	}
 
 	model := strings.ToLower(c.Model.Model)
+	if strings.HasPrefix(model, "claude") {
+		return ProviderAnthropic
+	}
 	if strings.HasPrefix(model, "gpt") || strings.HasPrefix(model, "o") {
 		return ProviderOpenAI
 	}
