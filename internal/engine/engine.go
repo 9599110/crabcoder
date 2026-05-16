@@ -144,7 +144,8 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 	requestID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
 	e.session.Start(requestID)
 
-	taskDefs := e.tools.Definitions()
+	// Compact tool definitions: types+required, stripped descriptions
+	compactDefs := buildCompactDefs(e.tools.Definitions())
 
 	// Build local message history (don't mutate caller's slice)
 	history := make([]model.Message, len(messages))
@@ -154,9 +155,7 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 	totalToolCalls := 0
 
 	for round := 0; round < maxRounds; round++ {
-		// Phase 1: Send only tool previews (name+desc, no parameter details)
-		previewDefs := buildPreviewDefs(taskDefs)
-		resp, err := e.llm.Chat(ctx, history, &llm.ChatOptions{Tools: previewDefs})
+		resp, err := e.llm.Chat(ctx, history, &llm.ChatOptions{Tools: compactDefs})
 		if err != nil {
 			e.session.Transition(SessionError)
 			return nil, fmt.Errorf("chat: LLM call: %w", err)
@@ -169,54 +168,19 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 			return &Response{Text: resp.Content, TasksExecuted: totalToolCalls, SessionID: requestID}, nil
 		}
 
-		// Phase 2: Send full definitions only for the tools the LLM selected
-		// Deduplicate by name (LLM may select the same tool multiple times)
-		seen := make(map[string]bool)
-		var fullDefs []model.ToolDefinition
+		// Show response and tool calls
+		showLLMResponse(resp, "Tool calls:")
 		for _, tc := range resp.ToolCalls {
-			if seen[tc.Name] {
-				continue
-			}
-			seen[tc.Name] = true
-			if exec := e.tools.Get(tc.Name); exec != nil {
-				fullDefs = append(fullDefs, exec.GetDefinition())
-			}
-		}
-		if len(fullDefs) == 0 {
-			history = append(history, model.Message{
-				Role:    model.RoleAssistant,
-				Content: resp.Content,
-			})
-			continue
-		}
-
-		detailResp, err := e.llm.Chat(ctx, history, &llm.ChatOptions{Tools: fullDefs})
-		if err != nil {
-			e.session.Transition(SessionError)
-			return nil, fmt.Errorf("chat: LLM detail call: %w", err)
-		}
-
-		execCalls := detailResp.ToolCalls
-		if len(execCalls) == 0 {
-			// LLM didn't produce tool calls with full defs, return text
-			e.session.Transition(SessionCompleted)
-			showLLMResponse(detailResp, "")
-			return &Response{Text: detailResp.Content, TasksExecuted: totalToolCalls, SessionID: requestID}, nil
-		}
-
-		// Show the response and tool calls
-		showLLMResponse(detailResp, "Tool calls:")
-		for _, tc := range execCalls {
 			showToolCall(tc)
 		}
 
 		// Append assistant message (with tool calls) to history
 		assistantMsg := model.Message{
 			Role:      model.RoleAssistant,
-			Content:   detailResp.Content,
+			Content:   resp.Content,
 			Reasoning: resp.Reasoning,
 		}
-		for _, tc := range execCalls {
+		for _, tc := range resp.ToolCalls {
 			assistantMsg.ToolCalls = append(assistantMsg.ToolCalls, model.ToolCall{
 				ID:   tc.ID,
 				Name: tc.Name,
@@ -226,8 +190,8 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 		history = append(history, assistantMsg)
 
 		// Execute tool calls and collect results
-		totalToolCalls += len(execCalls)
-		for _, tc := range execCalls {
+		totalToolCalls += len(resp.ToolCalls)
+		for _, tc := range resp.ToolCalls {
 			exec := e.tools.Get(tc.Name)
 			if exec == nil {
 				history = append(history, model.Message{
@@ -365,19 +329,27 @@ func promptUserApproval(name string, args map[string]any, decision security.Appr
 	return answer == "y" || answer == "Y" || answer == "yes"
 }
 
-func buildPreviewDefs(defs []model.ToolDefinition) []model.ToolDefinition {
-	previews := make([]model.ToolDefinition, len(defs))
+func buildCompactDefs(defs []model.ToolDefinition) []model.ToolDefinition {
+	compacts := make([]model.ToolDefinition, len(defs))
 	for i, d := range defs {
-		previews[i] = model.ToolDefinition{
+		compacts[i] = model.ToolDefinition{
 			Name:        d.Name,
 			Description: d.Description,
 			Parameters: model.ParameterSchema{
-				Type:       "object",
-				Properties: map[string]model.ParameterProperty{},
+				Type:       d.Parameters.Type,
+				Required:   d.Parameters.Required,
+				Properties: make(map[string]model.ParameterProperty),
 			},
 		}
+		for k, v := range d.Parameters.Properties {
+			compacts[i].Parameters.Properties[k] = model.ParameterProperty{
+				Type:  v.Type,
+				Enum:  v.Enum,
+				Items: v.Items,
+			}
+		}
 	}
-	return previews
+	return compacts
 }
 
 func countFailed(tasks []*model.Task) int {
