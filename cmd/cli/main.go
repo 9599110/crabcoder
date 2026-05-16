@@ -213,6 +213,10 @@ func runChat(cmd *cobra.Command, args []string) error {
 			fmt.Println(initProject())
 			continue
 		}
+		if strings.HasPrefix(input, "/") {
+			showSlashHelp(input)
+			continue
+		}
 
 		messages = append(messages, model.Message{Role: model.RoleUser, Content: input})
 		done := make(chan struct{})
@@ -262,6 +266,21 @@ func loadProjectContext() string {
 		content = content[:8000] + "\n... (truncated)"
 	}
 	return content
+}
+
+// showSlashHelp prints available slash commands. For /help lists all commands;
+// for unknown commands suggests /help.
+func showSlashHelp(input string) {
+	switch input {
+	case "/help", "/":
+		fmt.Println()
+		fmt.Println("  /help        Show this help")
+		fmt.Println("  /init        Generate project context (.crabcoder/CONTEXT.md)")
+		fmt.Println("  /exit, /quit Exit the session")
+		fmt.Println()
+	default:
+		fmt.Printf("  Unknown command %q — type /help for available commands.\n", input)
+	}
 }
 
 func resolveDataDir(raw string) string {
