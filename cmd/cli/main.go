@@ -42,31 +42,41 @@ var askCmd = &cobra.Command{
 	Use:   "ask [request]",
 	Short: "Process a one-shot task using decomposition + DAG execution",
 	Args:  cobra.MinimumNArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return runAsk(args[0])
-	},
+	RunE: runAsk,
 }
 
 var chatCmd = &cobra.Command{
 	Use:   "chat",
 	Short: "Start interactive REPL chat session",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return runChat()
-	},
+	RunE: runChat,
 }
 
 func init() {
+	rootCmd.PersistentFlags().StringP("model", "m", "", "Model to use (e.g. deepseek-chat, claude-sonnet-4-6)")
 	rootCmd.AddCommand(askCmd)
 	rootCmd.AddCommand(chatCmd)
 }
 
-func runAsk(request string) error {
+func applyModelFlag(cmd *cobra.Command, cfg *config.Config) {
+	if model, _ := cmd.Flags().GetString("model"); model != "" {
+		cfg.Model.Model = model
+		// Re-resolve alias for the CLI-specified model
+		if resolved, ok := cfg.Aliases[cfg.Model.Model]; ok {
+			cfg.Model.Model = resolved
+		}
+	}
+}
+
+func runAsk(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
 	}
+	applyModelFlag(cmd, cfg)
 
 	log.Init("info")
+
+	request := args[0]
 
 	bus := event.NewBus()
 	sub := bus.Subscribe(event.SessionState)
@@ -90,6 +100,7 @@ func runAsk(request string) error {
 	eng := engine.NewEngine(llm, toolReg, decider, bus, cfg.Executor.Workers, time.Duration(cfg.Executor.Timeout)*time.Second)
 
 	log.Info("Processing request...")
+	log.Info("Model", "model", cfg.Model.Model)
 	resp, err := eng.ProcessRequest(context.Background(), &engine.Request{Text: request, Mode: "ask"})
 	if err != nil {
 		return err
@@ -103,11 +114,12 @@ func runAsk(request string) error {
 	return nil
 }
 
-func runChat() error {
+func runChat(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
 	}
+	applyModelFlag(cmd, cfg)
 
 	log.Init("info")
 
@@ -126,7 +138,7 @@ func runChat() error {
 
 	eng := engine.NewEngine(llm, toolReg, decider, bus, cfg.Executor.Workers, time.Duration(cfg.Executor.Timeout)*time.Second)
 
-	fmt.Println("🤖 CrabCoder chat mode (type /exit to quit)")
+	fmt.Printf("🤖 CrabCoder chat mode  model=%s  (type /exit to quit)\n", cfg.Model.Model)
 	fmt.Println()
 
 	// Simple readline loop
