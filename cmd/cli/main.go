@@ -271,37 +271,55 @@ func loadProjectContext() string {
 var slashCommands = []struct {
 	cmd  string
 	desc string
+	tag  string // category tag: "builtin", "user", etc.
 }{
-	{"/help", "Show this help"},
-	{"/init", "Generate project context (.crabcoder/CONTEXT.md)"},
-	{"/exit, /quit", "Exit the session"},
+	{"/help", "显示帮助信息", "builtin"},
+	{"/init", "初始化项目上下文文件 (.crabcoder/CONTEXT.md)", "builtin"},
+	{"/exit", "退出会话", "builtin"},
+	{"/quit", "退出会话", "builtin"},
 }
 
 func showSlashHelp(input string) {
 	if input == "/help" || input == "/" {
-		fmt.Println()
+		// Echo the input
+		fmt.Printf("\n❯ /\n")
+		// Separator line
+		fmt.Println(strings.Repeat("─", 80))
+		// List all commands
 		for _, c := range slashCommands {
-			fmt.Printf("  %-12s %s\n", c.cmd, c.desc)
+			tag := ""
+			if c.tag != "" {
+				tag = " (" + c.tag + ")"
+			}
+			fmt.Printf("  \033[1m%-30s\033[0m %s%s\n", c.cmd, c.desc, tag)
 		}
 		fmt.Println()
 		return
 	}
-	// Prefix matching for partial input like /i → /init
-	var matches []string
+	// Prefix matching for partial input
+	var matches []struct {
+		cmd  string
+		desc string
+		tag  string
+	}
 	for _, c := range slashCommands {
-		name := strings.Split(c.cmd, ",")[0]
-		if strings.HasPrefix(name, input) {
-			matches = append(matches, name)
+		if strings.HasPrefix(c.cmd, input) {
+			matches = append(matches, c)
 		}
 	}
 	if len(matches) > 0 {
-		fmt.Println()
+		fmt.Printf("\n❯ %s\n", input)
+		fmt.Println(strings.Repeat("─", 80))
 		for _, m := range matches {
-			fmt.Println(" ", m)
+			tag := ""
+			if m.tag != "" {
+				tag = " (" + m.tag + ")"
+			}
+			fmt.Printf("  \033[1m%-30s\033[0m %s%s\n", m.cmd, m.desc, tag)
 		}
 		fmt.Println()
 	} else {
-		fmt.Printf("  Unknown command %q — type /help for available commands.\n", input)
+		fmt.Printf("\n  未知命令 %q — 输入 /help 查看可用命令。\n", input)
 	}
 }
 
