@@ -13,15 +13,15 @@ import (
 
 type ReadFileExecutor struct{}
 
-func (e *ReadFileExecutor) Execute(ctx context.Context, args map[string]any) (*ToolResult, error) {
+func (e *ReadFileExecutor) Execute(ctx context.Context, args map[string]any) (*model.TaskResult, error) {
 	path, _ := args["path"].(string)
 	if path == "" {
-		return &ToolResult{Success: false, Error: "path is required"}, nil
+		return &model.TaskResult{Success: false, Error: "path is required"}, nil
 	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return &ToolResult{Success: false, Error: err.Error()}, nil
+		return &model.TaskResult{Success: false, Error: err.Error()}, nil
 	}
 
 	output := string(data)
@@ -43,7 +43,7 @@ func (e *ReadFileExecutor) Execute(ctx context.Context, args map[string]any) (*T
 		}
 	}
 
-	return &ToolResult{Success: true, Output: strings.Join(lines, "\n")}, nil
+	return &model.TaskResult{Success: true, Output: strings.Join(lines, "\n")}, nil
 }
 
 func (e *ReadFileExecutor) Validate(args map[string]any) error {
@@ -76,22 +76,22 @@ func (e *ReadFileExecutor) RiskLevel() RiskLevel { return RiskLow }
 
 type WriteFileExecutor struct{}
 
-func (e *WriteFileExecutor) Execute(ctx context.Context, args map[string]any) (*ToolResult, error) {
+func (e *WriteFileExecutor) Execute(ctx context.Context, args map[string]any) (*model.TaskResult, error) {
 	path, _ := args["path"].(string)
 	content, _ := args["content"].(string)
 	if path == "" {
-		return &ToolResult{Success: false, Error: "path is required"}, nil
+		return &model.TaskResult{Success: false, Error: "path is required"}, nil
 	}
 
 	if err := os.MkdirAll(strings.TrimSuffix(path, "/"+baseName(path)), 0755); err != nil {
-		return &ToolResult{Success: false, Error: err.Error()}, nil
+		return &model.TaskResult{Success: false, Error: err.Error()}, nil
 	}
 
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		return &ToolResult{Success: false, Error: err.Error()}, nil
+		return &model.TaskResult{Success: false, Error: err.Error()}, nil
 	}
 
-	return &ToolResult{Success: true, Output: fmt.Sprintf("Wrote %d bytes to %s", len(content), path)}, nil
+	return &model.TaskResult{Success: true, Output: fmt.Sprintf("Wrote %d bytes to %s", len(content), path)}, nil
 }
 
 func (e *WriteFileExecutor) Validate(args map[string]any) error {
@@ -127,19 +127,19 @@ func (e *WriteFileExecutor) RiskLevel() RiskLevel { return RiskMedium }
 
 type EditFileExecutor struct{}
 
-func (e *EditFileExecutor) Execute(ctx context.Context, args map[string]any) (*ToolResult, error) {
+func (e *EditFileExecutor) Execute(ctx context.Context, args map[string]any) (*model.TaskResult, error) {
 	path, _ := args["path"].(string)
 	oldStr, _ := args["old_string"].(string)
 	newStr, _ := args["new_string"].(string)
 	replaceAll, _ := args["replace_all"].(bool)
 
 	if path == "" {
-		return &ToolResult{Success: false, Error: "path is required"}, nil
+		return &model.TaskResult{Success: false, Error: "path is required"}, nil
 	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return &ToolResult{Success: false, Error: err.Error()}, nil
+		return &model.TaskResult{Success: false, Error: err.Error()}, nil
 	}
 
 	content := string(data)
@@ -148,19 +148,19 @@ func (e *EditFileExecutor) Execute(ctx context.Context, args map[string]any) (*T
 	} else {
 		count := strings.Count(content, oldStr)
 		if count == 0 {
-			return &ToolResult{Success: false, Error: fmt.Sprintf("old_string not found in %s", path)}, nil
+			return &model.TaskResult{Success: false, Error: fmt.Sprintf("old_string not found in %s", path)}, nil
 		}
 		if count > 1 {
-			return &ToolResult{Success: false, Error: fmt.Sprintf("old_string found %d times in %s, use replace_all or more context", count, path)}, nil
+			return &model.TaskResult{Success: false, Error: fmt.Sprintf("old_string found %d times in %s, use replace_all or more context", count, path)}, nil
 		}
 		content = strings.Replace(content, oldStr, newStr, 1)
 	}
 
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		return &ToolResult{Success: false, Error: err.Error()}, nil
+		return &model.TaskResult{Success: false, Error: err.Error()}, nil
 	}
 
-	return &ToolResult{Success: true, Output: fmt.Sprintf("Replaced in %s", path)}, nil
+	return &model.TaskResult{Success: true, Output: fmt.Sprintf("Replaced in %s", path)}, nil
 }
 
 func (e *EditFileExecutor) Validate(args map[string]any) error {

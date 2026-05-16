@@ -390,9 +390,9 @@ func DetectProvider(model string, cfg ModelConfig) ProviderKind {
 
 | # | 文件 | 状态 | 说明 |
 |---|------|------|------|
-| 5.1 | `internal/scheduler/dag.go` | ⬜ | DAG 数据结构 + Kahn 算法 + 环检测 |
-| 5.2 | `internal/scheduler/pool.go` | ⬜ | Worker Pool (goroutine + channel) |
-| 5.3 | `internal/scheduler/scheduler.go` | ⬜ | Scheduler（AddTask/Build/Execute） |
+| 5.1 | `internal/scheduler/dag.go` | ✅ | DAG: adjacency list, Kahn cycle detection, ReadyTasks |
+| 5.2 | `internal/scheduler/pool.go` | ✅ | Worker Pool: N goroutines, task/result channels |
+| 5.3 | `internal/scheduler/scheduler.go` | ✅ | Scheduler: AddTask/Build/Execute with event emission |
 
 ### Phase 6: 核心引擎（L4 编排层）
 

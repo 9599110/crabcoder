@@ -30,14 +30,8 @@ func (r RiskLevel) String() string {
 	}
 }
 
-type ToolResult struct {
-	Success bool
-	Output  string
-	Error   string
-}
-
 type Executor interface {
-	Execute(ctx context.Context, args map[string]any) (*ToolResult, error)
+	Execute(ctx context.Context, args map[string]any) (*model.TaskResult, error)
 	Validate(args map[string]any) error
 	Definition() model.ToolDefinition
 	RiskLevel() RiskLevel

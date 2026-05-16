@@ -14,10 +14,10 @@ type ShellExecutor struct {
 	DefaultTimeout time.Duration
 }
 
-func (e *ShellExecutor) Execute(ctx context.Context, args map[string]any) (*ToolResult, error) {
+func (e *ShellExecutor) Execute(ctx context.Context, args map[string]any) (*model.TaskResult, error) {
 	command, _ := args["command"].(string)
 	if command == "" {
-		return &ToolResult{Success: false, Error: "command is required"}, nil
+		return &model.TaskResult{Success: false, Error: "command is required"}, nil
 	}
 
 	timeout := e.DefaultTimeout
@@ -31,7 +31,7 @@ func (e *ShellExecutor) Execute(ctx context.Context, args map[string]any) (*Tool
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	output, err := cmd.CombinedOutput()
 
-	result := &ToolResult{
+	result := &model.TaskResult{
 		Success: err == nil,
 		Output:  strings.TrimSpace(string(output)),
 	}
