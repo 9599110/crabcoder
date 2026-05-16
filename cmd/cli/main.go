@@ -268,17 +268,39 @@ func loadProjectContext() string {
 	return content
 }
 
-// showSlashHelp prints available slash commands. For /help lists all commands;
-// for unknown commands suggests /help.
+var slashCommands = []struct {
+	cmd  string
+	desc string
+}{
+	{"/help", "Show this help"},
+	{"/init", "Generate project context (.crabcoder/CONTEXT.md)"},
+	{"/exit, /quit", "Exit the session"},
+}
+
 func showSlashHelp(input string) {
-	switch input {
-	case "/help", "/":
+	if input == "/help" || input == "/" {
 		fmt.Println()
-		fmt.Println("  /help        Show this help")
-		fmt.Println("  /init        Generate project context (.crabcoder/CONTEXT.md)")
-		fmt.Println("  /exit, /quit Exit the session")
+		for _, c := range slashCommands {
+			fmt.Printf("  %-12s %s\n", c.cmd, c.desc)
+		}
 		fmt.Println()
-	default:
+		return
+	}
+	// Prefix matching for partial input like /i → /init
+	var matches []string
+	for _, c := range slashCommands {
+		name := strings.Split(c.cmd, ",")[0]
+		if strings.HasPrefix(name, input) {
+			matches = append(matches, name)
+		}
+	}
+	if len(matches) > 0 {
+		fmt.Println()
+		for _, m := range matches {
+			fmt.Println(" ", m)
+		}
+		fmt.Println()
+	} else {
 		fmt.Printf("  Unknown command %q — type /help for available commands.\n", input)
 	}
 }
