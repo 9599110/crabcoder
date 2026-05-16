@@ -31,7 +31,7 @@ func NewParser(llm provider.LLMProvider) *Parser {
 
 func (p *Parser) Parse(ctx context.Context, userRequest string, tools []model.ToolDefinition) ([]*model.Task, error) {
 	toolList := formatToolList(tools)
-	systemPrompt := fmt.Sprintf(`You are a task decomposition engine. Given a user request, break it down into a list of executable subtasks.
+	systemPrompt := fmt.Sprintf(`You are a task decomposition engine. Given a software engineering request, break it down into a list of executable subtasks.
 
 Available tools:
 %s

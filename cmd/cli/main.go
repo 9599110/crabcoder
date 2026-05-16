@@ -32,11 +32,11 @@ func main() {
 
 var rootCmd = &cobra.Command{
 	Use:   "crab",
-	Short: "CrabCoder - AI-powered coding assistant with task decomposition",
-	Long: `CrabCoder breaks complex programming tasks into independent subtasks,
-executes them concurrently, and aggregates the results.`,
+	Short: "CrabCoder - interactive AI coding agent",
+	Long: `CrabCoder is an interactive AI coding agent that helps with software engineering tasks.
+It decomposes complex work, executes subtasks in parallel, and aggregates results.`,
 	Version: fmt.Sprintf("%s (built %s)", Version, BuildTime),
-	RunE: runChat, // default to chat mode when no subcommand
+	RunE: runChat, // default to interactive coding agent
 }
 
 var askCmd = &cobra.Command{
@@ -48,12 +48,12 @@ var askCmd = &cobra.Command{
 
 var chatCmd = &cobra.Command{
 	Use:   "chat",
-	Short: "Start interactive REPL chat session",
+	Short: "Start an interactive coding session (REPL)",
 	RunE: runChat,
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringP("model", "m", "", "Model to use (e.g. deepseek-chat, claude-sonnet-4-6)")
+	rootCmd.PersistentFlags().StringP("model", "m", "", "Model to use (e.g. claude-sonnet-4-6, deepseek-chat)")
 	rootCmd.AddCommand(askCmd)
 	rootCmd.AddCommand(chatCmd)
 }
@@ -139,14 +139,14 @@ func runChat(cmd *cobra.Command, args []string) error {
 
 	eng := engine.NewEngine(llm, toolReg, decider, bus, cfg.Executor.Workers, time.Duration(cfg.Executor.Timeout)*time.Second)
 
-	fmt.Printf("🤖 CrabCoder chat mode  model=%s  (type /exit to quit)\n", cfg.Model.Model)
+	fmt.Printf("CrabCoder coding agent  model=%s  (type /exit to quit)\n", cfg.Model.Model)
 	fmt.Println()
 
 	// Simple readline loop
 	var messages []model.Message
 	messages = append(messages, model.Message{
 		Role:    model.RoleSystem,
-		Content: "You are an AI coding assistant. Use tools when appropriate to help the user.",
+		Content: "You are an interactive agent that helps users with software engineering tasks. Use tools to read, edit, and execute code.",
 	})
 
 	for {

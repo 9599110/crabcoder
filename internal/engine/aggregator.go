@@ -19,11 +19,11 @@ func NewAggregator(llm provider.LLMProvider) *Aggregator {
 
 func (a *Aggregator) Aggregate(ctx context.Context, userRequest string, tasks []*model.Task) (string, error) {
 	var parts []string
-	parts = append(parts, fmt.Sprintf("任务数: %d", len(tasks)))
+	parts = append(parts, fmt.Sprintf("Task count: %d", len(tasks)))
 	for _, t := range tasks {
-		status := "成功"
+		status := "Success"
 		if t.Status == model.TaskFailed {
-			status = "失败"
+			status = "Failed"
 		}
 		output := ""
 		if t.Result != nil {
@@ -39,7 +39,7 @@ func (a *Aggregator) Aggregate(ctx context.Context, userRequest string, tasks []
 			t.ID, status, t.Description, strings.TrimSpace(output)))
 	}
 
-	systemPrompt := fmt.Sprintf(`You are a coding assistant. Summarize the following task execution results into a natural language response for the user.
+	systemPrompt := fmt.Sprintf(`You are an agent that synthesizes task execution results. Summarize the following results into a clear, natural language response for the user.
 
 Original request: %s
 

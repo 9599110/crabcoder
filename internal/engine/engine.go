@@ -151,7 +151,7 @@ func (e *Engine) ProcessChat(ctx context.Context, messages []model.Message) (*Re
 				results = append(results, fmt.Sprintf("[%s]: %s", tc.Name, result.Output))
 			}
 		}
-		summary := "Tool execution results:\n"
+		summary := "Tool results:\n"
 		for _, r := range results {
 			summary += r + "\n"
 		}
