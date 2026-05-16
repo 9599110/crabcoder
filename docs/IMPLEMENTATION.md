@@ -353,12 +353,12 @@ func DetectProvider(model string, cfg ModelConfig) ProviderKind {
 
 | # | 文件 | 状态 | 说明 |
 |---|------|------|------|
-| 1.1 | `pkg/model/task.go` | ⬜ | Task, TaskStatus, TaskResult |
-| 1.2 | `pkg/model/message.go` | ⬜ | Message, MessageRole |
-| 1.3 | `pkg/model/tool.go` | ⬜ | ToolDefinition, ParameterSchema |
-| 1.4 | `pkg/config/config.go` | ⬜ | Config 结构 + Viper 加载 |
-| 1.5 | `pkg/log/logger.go` | ⬜ | slog 封装 |
-| 1.6 | `internal/event/bus.go` | ⬜ | EventBus 实现 |
+| 1.1 | `pkg/model/task.go` | ✅ | Task, TaskStatus, TaskResult, FileChange |
+| 1.2 | `pkg/model/message.go` | ✅ | Message, MessageRole |
+| 1.3 | `pkg/model/tool.go` | ✅ | ToolDefinition, ParameterSchema, ParameterProperty |
+| 1.4 | `pkg/config/config.go` | ✅ | Config + Viper loader + Provider auto-detect |
+| 1.5 | `pkg/log/logger.go` | ✅ | slog 封装 (Debug/Info/Warn/Error) |
+| 1.6 | `internal/event/bus.go` | ✅ | EventBus (Publish/Subscribe, 5 event types) |
 
 ### Phase 2: LLM Provider（L2 抽象层）
 
