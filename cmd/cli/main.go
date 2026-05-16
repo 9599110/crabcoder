@@ -4,15 +4,18 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/crabcoder/crabcoder/internal/display"
 	"github.com/crabcoder/crabcoder/internal/engine"
 	"github.com/crabcoder/crabcoder/internal/event"
-	"github.com/crabcoder/crabcoder/internal/provider"
+	"github.com/crabcoder/crabcoder/internal/llm"
 	"github.com/crabcoder/crabcoder/internal/security"
-	"github.com/crabcoder/crabcoder/internal/tool"
+	"github.com/crabcoder/crabcoder/internal/tools"
 	"github.com/crabcoder/crabcoder/pkg/config"
 	"github.com/crabcoder/crabcoder/pkg/log"
 	"github.com/crabcoder/crabcoder/pkg/model"
@@ -21,6 +24,8 @@ import (
 var (
 	Version   = "dev"
 	BuildTime = "unknown"
+
+	resumeID string
 )
 
 func main() {
@@ -54,6 +59,7 @@ var chatCmd = &cobra.Command{
 
 func init() {
 	rootCmd.PersistentFlags().StringP("model", "m", "", "Model to use (e.g. claude-sonnet-4-6, deepseek-chat)")
+	chatCmd.Flags().StringVarP(&resumeID, "resume", "r", "", "Resume a previous session by ID")
 	rootCmd.AddCommand(askCmd)
 	rootCmd.AddCommand(chatCmd)
 }
@@ -75,11 +81,18 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 	applyModelFlag(cmd, cfg)
 
-	log.Init("info")
+	log.Init(cfg.Logging.Level)
 
 	request := args[0]
 
 	bus := event.NewBus()
+
+	// Start CLI display queue — serialises parallel task output to terminal
+	dq := display.NewDisplayQueue()
+	dq.SubscribeFromBus(bus)
+	go dq.Start()
+	defer dq.Done()
+
 	sub := bus.Subscribe(event.SessionState)
 	go func() {
 		for e := range sub {
@@ -87,18 +100,20 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
-	llm, err := provider.NewFromConfig(cfg)
+	llm, err := llm.NewFromConfig(cfg)
 	if err != nil {
 		return fmt.Errorf("provider: %w", err)
 	}
 
-	toolReg := tool.NewRegistry()
+	toolReg := tools.NewToolRegistry()
 	registerTools(toolReg)
 
 	secPolicy := security.NewPolicy(security.Mode(cfg.Security.Mode))
 	decider := security.NewDecider(secPolicy)
 
-	eng := engine.NewEngine(llm, toolReg, decider, bus, cfg.Executor.Workers, time.Duration(cfg.Executor.Timeout)*time.Second)
+	eng := engine.NewEngine(llm, toolReg, decider, bus, 4, time.Duration(cfg.Tools.Shell.Timeout)*time.Second)
+	stopWatchdog := eng.EnableWatchdog(&cfg.Timeout)
+	defer stopWatchdog()
 
 	log.Info("Processing request...")
 	log.Info("Model", "model", cfg.Model.Model)
@@ -107,9 +122,8 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Println()
+	fmt.Printf("\n%s--- 汇总 ---%s\n", "\033[1m", "\033[0m")
 	fmt.Println(resp.Text)
-	fmt.Println()
 	log.Info("Complete", "tasks_executed", resp.TasksExecuted)
 
 	return nil
@@ -122,32 +136,60 @@ func runChat(cmd *cobra.Command, args []string) error {
 	}
 	applyModelFlag(cmd, cfg)
 
-	log.Init("info")
+	log.Init(cfg.Logging.Level)
 
 	bus := event.NewBus()
 
-	llm, err := provider.NewFromConfig(cfg)
+	// Start CLI display queue — serialises parallel task output to terminal
+	dq := display.NewDisplayQueue()
+	dq.SubscribeFromBus(bus)
+	go dq.Start()
+	defer dq.Done()
+
+	llm, err := llm.NewFromConfig(cfg)
 	if err != nil {
 		return fmt.Errorf("provider: %w", err)
 	}
 
-	toolReg := tool.NewRegistry()
+	toolReg := tools.NewToolRegistry()
 	registerTools(toolReg)
 
 	secPolicy := security.NewPolicy(security.Mode(cfg.Security.Mode))
 	decider := security.NewDecider(secPolicy)
 
-	eng := engine.NewEngine(llm, toolReg, decider, bus, cfg.Executor.Workers, time.Duration(cfg.Executor.Timeout)*time.Second)
+	eng := engine.NewEngine(llm, toolReg, decider, bus, 4, time.Duration(cfg.Tools.Shell.Timeout)*time.Second)
+	stopWatchdog := eng.EnableWatchdog(&cfg.Timeout)
+	defer stopWatchdog()
 
-	fmt.Printf("CrabCoder coding agent  model=%s  (type /exit to quit)\n", cfg.Model.Model)
-	fmt.Println()
+	// Session persistence
+	dataDir := resolveDataDir(cfg.App.DataDir)
+	sessionStore := engine.NewSessionStore(filepath.Join(dataDir, "sessions"))
 
-	// Simple readline loop
 	var messages []model.Message
-	messages = append(messages, model.Message{
-		Role:    model.RoleSystem,
-		Content: "You are an interactive agent that helps users with software engineering tasks. Use tools to read, edit, and execute code.",
-	})
+	sessionID := resumeID
+
+	if resumeID != "" {
+		record, err := sessionStore.Load(resumeID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to load session %q: %v\n", resumeID, err)
+		} else {
+			messages = record.Messages
+			sessionID = record.ID
+			fmt.Printf("Resumed session %q (%d messages, model: %s)\n", sessionID, len(messages), record.Model)
+			fmt.Println()
+		}
+	}
+
+	if len(messages) == 0 {
+		sessionID = fmt.Sprintf("chat-%d", time.Now().UnixNano())
+		messages = append(messages, model.Message{
+			Role:    model.RoleSystem,
+			Content: "You are an interactive agent that helps users with software engineering tasks. Use tools to read, edit, and execute code.",
+		})
+	}
+
+	fmt.Printf("CrabCoder coding agent  model=%s  session=%s  (type /exit to quit)\n", cfg.Model.Model, truncateID(sessionID))
+	fmt.Println()
 
 	for {
 		fmt.Print("> ")
@@ -167,14 +209,49 @@ func runChat(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Println(resp.Text)
 		messages = append(messages, model.Message{Role: model.RoleAssistant, Content: resp.Text})
+
+		// Auto-save after each exchange
+		sessionStore.Save(&engine.SessionRecord{
+			ID:        sessionID,
+			CreatedAt: time.Now(),
+			Messages:  messages,
+			Model:     cfg.Model.Model,
+		})
 	}
+
+	// Final save on exit
+	sessionStore.Save(&engine.SessionRecord{
+		ID:        sessionID,
+		CreatedAt: time.Now(),
+		Messages:  messages,
+		Model:     cfg.Model.Model,
+	})
 
 	return nil
 }
 
-func registerTools(r *tool.Registry) {
-	r.Register(&tool.ReadFileExecutor{})
-	r.Register(&tool.WriteFileExecutor{})
-	r.Register(&tool.EditFileExecutor{})
-	r.Register(&tool.ShellExecutor{DefaultTimeout: 30 * time.Second})
+func resolveDataDir(raw string) string {
+	if strings.HasPrefix(raw, "~/") {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			return filepath.Join(home, raw[2:])
+		}
+	}
+	return raw
+}
+
+func truncateID(id string) string {
+	if len(id) > 16 {
+		return id[:16]
+	}
+	return id
+}
+
+func registerTools(r *tools.ToolRegistry) {
+	r.Register("read_file", &tools.ReadFileExecutor{})
+	r.Register("write_file", &tools.WriteFileExecutor{})
+	r.Register("edit_file", &tools.EditFileExecutor{})
+	r.Register("bash", &tools.ShellExecutor{DefaultTimeout: 30 * time.Second})
+	r.Register("grep", &tools.GrepExecutor{})
+	r.Register("glob", &tools.GlobExecutor{})
 }

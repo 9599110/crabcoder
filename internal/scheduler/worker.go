@@ -7,11 +7,11 @@ import (
 	"github.com/crabcoder/crabcoder/pkg/model"
 )
 
-type TaskExecutor func(ctx context.Context, task *model.Task) *model.TaskResult
+type TaskFunc func(ctx context.Context, task *model.Task) *model.TaskResult
 
 type Pool struct {
 	workers   int
-	executor  TaskExecutor
+	executor  TaskFunc
 	taskCh    chan *model.Task
 	resultCh  chan taskResult
 	wg        sync.WaitGroup
@@ -22,7 +22,7 @@ type taskResult struct {
 	Result *model.TaskResult
 }
 
-func NewPool(workers int, executor TaskExecutor) *Pool {
+func NewPool(workers int, executor TaskFunc) *Pool {
 	return &Pool{
 		workers:  workers,
 		executor: executor,

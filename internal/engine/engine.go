@@ -6,10 +6,12 @@ import (
 	"time"
 
 	"github.com/crabcoder/crabcoder/internal/event"
-	"github.com/crabcoder/crabcoder/internal/provider"
+	"github.com/crabcoder/crabcoder/internal/llm"
 	"github.com/crabcoder/crabcoder/internal/scheduler"
 	"github.com/crabcoder/crabcoder/internal/security"
-	"github.com/crabcoder/crabcoder/internal/tool"
+	"github.com/crabcoder/crabcoder/internal/tools"
+	"github.com/crabcoder/crabcoder/internal/watchdog"
+	"github.com/crabcoder/crabcoder/pkg/config"
 	"github.com/crabcoder/crabcoder/pkg/model"
 )
 
@@ -26,40 +28,62 @@ type Response struct {
 	SessionID     string
 }
 
-type Engine struct {
-	llm       provider.LLMProvider
-	scheduler *scheduler.Scheduler
-	tools     *tool.Registry
-	security  *security.Decider
-	events    *event.Bus
-	session   *Session
-	parser    *Parser
+// Engine is the core engine interface as defined in the CrabCoder specification.
+type Engine interface {
+	ProcessRequest(ctx context.Context, req *Request) (*Response, error)
+	ProcessChat(ctx context.Context, messages []model.Message) (*Response, error)
+	CancelRequest(ctx context.Context, requestID string) error
+	ListTools() []model.ToolDefinition
+	Health() error
+	// EnableWatchdog creates and starts the watchdog monitor for stall detection.
+	EnableWatchdog(cfg *config.TimeoutConfig) context.CancelFunc
+}
+
+type engineImpl struct {
+	llm        llm.LLMProvider
+	scheduler  *scheduler.DAGScheduler
+	tools      *tools.ToolRegistry
+	security   *security.Decider
+	events     *event.Bus
+	session    *Session
+	parser     *Parser
 	aggregator *Aggregator
+	watcher    *watchdog.Watcher
 }
 
 func NewEngine(
-	llm provider.LLMProvider,
-	tools *tool.Registry,
+	llm llm.LLMProvider,
+	tools *tools.ToolRegistry,
 	sec *security.Decider,
 	bus *event.Bus,
 	poolSize int,
 	taskTimeout time.Duration,
-) *Engine {
-	e := &Engine{
+) Engine {
+	e := &engineImpl{
 		llm:      llm,
 		tools:    tools,
 		security: sec,
 		events:   bus,
 		session:  NewSession(bus),
 	}
-	e.scheduler = scheduler.NewScheduler(poolSize, taskTimeout, tools, bus)
+	e.scheduler = scheduler.NewDAGScheduler(poolSize, taskTimeout, tools, bus, sec)
 	e.parser = NewParser(llm)
 	e.aggregator = NewAggregator(llm)
 	return e
 }
 
+// EnableWatchdog creates and starts the watchdog monitor for stall detection.
+// Returns a cancel function to stop the watchdog.
+func (e *engineImpl) EnableWatchdog(cfg *config.TimeoutConfig) context.CancelFunc {
+	e.watcher = watchdog.New(cfg, e.events)
+	e.scheduler.SetWatcher(e.watcher)
+	ctx, cancel := context.WithCancel(context.Background())
+	go e.watcher.Start(ctx)
+	return cancel
+}
+
 // ProcessRequest — Path A: Task Decomposition (ask command)
-func (e *Engine) ProcessRequest(ctx context.Context, req *Request) (*Response, error) {
+func (e *engineImpl) ProcessRequest(ctx context.Context, req *Request) (*Response, error) {
 	requestID := req.SessionID
 	if requestID == "" {
 		requestID = fmt.Sprintf("req-%d", time.Now().UnixNano())
@@ -115,65 +139,123 @@ func (e *Engine) ProcessRequest(ctx context.Context, req *Request) (*Response, e
 }
 
 // ProcessChat — Path B: Interactive Agent (chat command)
-func (e *Engine) ProcessChat(ctx context.Context, messages []model.Message) (*Response, error) {
+func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) (*Response, error) {
 	requestID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
 	e.session.Start(requestID)
 
 	taskDefs := e.tools.Definitions()
 
-	resp, err := e.llm.Chat(ctx, messages, taskDefs)
-	if err != nil {
-		e.session.Transition(SessionError)
-		return nil, fmt.Errorf("chat: LLM call: %w", err)
-	}
+	// Build local message history (don't mutate caller's slice)
+	history := make([]model.Message, len(messages))
+	copy(history, messages)
 
-	// If LLM wants to call tools, execute them inline (for now)
-	// In future, this should loop with user confirmation
-	if len(resp.ToolCalls) > 0 {
-		var results []string
+	const maxRounds = 10
+	totalToolCalls := 0
+
+	for round := 0; round < maxRounds; round++ {
+		resp, err := e.llm.Chat(ctx, history, &llm.ChatOptions{Tools: taskDefs})
+		if err != nil {
+			e.session.Transition(SessionError)
+			return nil, fmt.Errorf("chat: LLM call: %w", err)
+		}
+
+		// No tool calls — LLM is done, return response
+		if len(resp.ToolCalls) == 0 {
+			e.session.Transition(SessionCompleted)
+			return &Response{
+				Text:          resp.Content,
+				TasksExecuted: totalToolCalls,
+				SessionID:     requestID,
+			}, nil
+		}
+
+		// Append assistant message (with tool calls) to history
+		history = append(history, model.Message{
+			Role:    model.RoleAssistant,
+			Content: resp.Content,
+		})
+
+		// Execute tool calls and collect results
+		totalToolCalls += len(resp.ToolCalls)
 		for _, tc := range resp.ToolCalls {
-			exec, ok := e.tools.Get(tc.Name)
-			if !ok {
+			exec := e.tools.Get(tc.Name)
+			if exec == nil {
+				history = append(history, model.Message{
+					Role:       model.RoleTool,
+					Content:    fmt.Sprintf("tool %q not found", tc.Name),
+					Name:       tc.Name,
+					ToolCallID: tc.ID,
+				})
 				continue
 			}
 
-			// Security check
 			decision := e.security.Decide(exec, tc.Args)
 			if !decision.Approved {
-				results = append(results, fmt.Sprintf("[%s]: %s (risk: %s)", tc.Name, decision.Message, decision.Risk))
+				history = append(history, model.Message{
+					Role:       model.RoleTool,
+					Content:    fmt.Sprintf("blocked: %s (risk: %s)", decision.Message, decision.Risk),
+					Name:       tc.Name,
+					ToolCallID: tc.ID,
+				})
 				continue
 			}
 
 			result, err := exec.Execute(ctx, tc.Args)
 			if err != nil || !result.Success {
-				results = append(results, fmt.Sprintf("[%s]: FAILED - %s", tc.Name, result.Error))
+				errMsg := "failed"
+				if result != nil {
+					errMsg = result.Error
+				} else if err != nil {
+					errMsg = err.Error()
+				}
+				history = append(history, model.Message{
+					Role:       model.RoleTool,
+					Content:    errMsg,
+					Name:       tc.Name,
+					ToolCallID: tc.ID,
+				})
 			} else {
-				results = append(results, fmt.Sprintf("[%s]: %s", tc.Name, result.Output))
+				history = append(history, model.Message{
+					Role:       model.RoleTool,
+					Content:    result.Output,
+					Name:       tc.Name,
+					ToolCallID: tc.ID,
+				})
 			}
 		}
-		summary := "Tool results:\n"
-		for _, r := range results {
-			summary += r + "\n"
-		}
-		return &Response{
-			Text:          summary + "\n" + resp.Content,
-			TasksExecuted: len(resp.ToolCalls),
-			SessionID:     requestID,
-		}, nil
 	}
 
 	e.session.Transition(SessionCompleted)
 	return &Response{
-		Text:      resp.Content,
-		SessionID: requestID,
+		Text:          history[len(history)-1].Content,
+		TasksExecuted: totalToolCalls,
+		SessionID:     requestID,
 	}, nil
 }
 
-func (e *Engine) ListTools() []model.ToolDefinition {
+func (e *engineImpl) ListTools() []model.ToolDefinition {
 	return e.tools.Definitions()
 }
 
-func (e *Engine) Session() *Session {
+func (e *engineImpl) CancelRequest(ctx context.Context, requestID string) error {
+	if e.session == nil || e.session.State() == SessionIdle {
+		return nil
+	}
+	e.session.Transition(SessionError)
+	return nil
+}
+
+func (e *engineImpl) Health() error {
+	if e.llm == nil {
+		return fmt.Errorf("engine: LLM provider not configured")
+	}
+	if e.tools == nil {
+		return fmt.Errorf("engine: tool registry not configured")
+	}
+	return nil
+}
+
+func (e *engineImpl) Session() *Session {
 	return e.session
 }
 

@@ -5,43 +5,178 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/viper"
 )
 
 type Config struct {
-	Model    ModelConfig    `mapstructure:"model"`
-	Security SecurityConfig `mapstructure:"security"`
-	Executor ExecutorConfig `mapstructure:"executor"`
-	Aliases  map[string]string `mapstructure:"aliases"`
+	App            AppConfig              `mapstructure:"app"`
+	Model          ModelConfig            `mapstructure:"model"`
+	Ollama         OllamaConfig           `mapstructure:"ollama"`
+	Security       SecurityConfig         `mapstructure:"security"`
+	Tools          ToolsConfig            `mapstructure:"tools"`
+	Logging        LoggingConfig          `mapstructure:"logging"`
+	IDE            IDEConfig              `mapstructure:"ide"`
+	Timeout        TimeoutConfig          `mapstructure:"timeout"`
+	Execution      ExecutionConfig        `mapstructure:"execution"`
+	FallbackModels []string               `mapstructure:"fallback_models"`
+	Aliases        map[string]string      `mapstructure:"aliases"`
+	ModelPrefixMap map[string]string      `mapstructure:"model_prefix_map"`
+}
+
+type AppConfig struct {
+	Name    string `mapstructure:"name"`
+	Version string `mapstructure:"version"`
+	DataDir string `mapstructure:"data_dir"`
 }
 
 type ModelConfig struct {
-	Provider string `mapstructure:"provider"`
-	Model    string `mapstructure:"model"`
-	APIKey   string `mapstructure:"api_key"`
-	BaseURL  string `mapstructure:"base_url"`
+	RoutingMode string  `mapstructure:"routing_mode"`
+	Provider    string  `mapstructure:"provider"`
+	Model       string  `mapstructure:"model"`
+	APIKey      string  `mapstructure:"api_key"`
+	BaseURL     string  `mapstructure:"base_url"`
+	Temperature float64 `mapstructure:"temperature"`
+	MaxTokens   int     `mapstructure:"max_tokens"`
+	TopP        float64 `mapstructure:"top_p"`
+}
+
+type OllamaConfig struct {
+	BaseURL string `mapstructure:"base_url"`
+	Model   string `mapstructure:"model"`
 }
 
 type SecurityConfig struct {
-	Mode string `mapstructure:"mode"`
+	Mode            string   `mapstructure:"mode"`
+	AllowedPaths    []string `mapstructure:"allowed_paths"`
+	AllowedCommands []string `mapstructure:"allowed_commands"`
 }
 
-type ExecutorConfig struct {
+type ToolsConfig struct {
+	Shell   ShellConfig   `mapstructure:"shell"`
+	Sandbox SandboxConfig `mapstructure:"sandbox"`
+}
+
+type ShellConfig struct {
+	Timeout   int `mapstructure:"timeout"`
+	MaxOutput int `mapstructure:"max_output"`
+}
+
+type SandboxConfig struct {
+	Enabled    bool   `mapstructure:"enabled"`
+	Network    bool   `mapstructure:"network"`
+	Filesystem string `mapstructure:"filesystem"`
+}
+
+type LoggingConfig struct {
+	Level  string `mapstructure:"level"`
+	Format string `mapstructure:"format"`
+	Output string `mapstructure:"output"`
+}
+
+type IDEConfig struct {
+	AutoDownload  bool   `mapstructure:"auto_download"`
+	UpdateChannel string `mapstructure:"update_channel"`
+}
+
+type TimeoutConfig struct {
+	LLM     LLMTimeoutConfig     `mapstructure:"llm"`
+	Tool    ToolTimeoutConfig    `mapstructure:"tool"`
+	Confirm ConfirmTimeoutConfig `mapstructure:"confirm"`
+	Global  GlobalTimeoutConfig  `mapstructure:"global"`
+}
+
+type LLMTimeoutConfig struct {
+	SoftTimeout time.Duration `mapstructure:"soft_timeout"`
+	HardTimeout time.Duration `mapstructure:"hard_timeout"`
+	StreamIdle  time.Duration `mapstructure:"stream_idle"`
+}
+
+type ToolTimeoutConfig struct {
+	SoftTimeout time.Duration `mapstructure:"soft_timeout"`
+	HardTimeout time.Duration `mapstructure:"hard_timeout"`
+	OutputIdle  time.Duration `mapstructure:"output_idle"`
+}
+
+type ConfirmTimeoutConfig struct {
+	Timeout  time.Duration `mapstructure:"timeout"`
+	Reminder time.Duration `mapstructure:"reminder"`
+}
+
+type GlobalTimeoutConfig struct {
+	DAGTimeout        time.Duration `mapstructure:"dag_timeout"`
+	WatchdogInterval  time.Duration `mapstructure:"watchdog_interval"`
+}
+
+type ExecutionConfig struct {
 	Workers int `mapstructure:"workers"`
-	Timeout int `mapstructure:"timeout"` // seconds
+	Timeout int `mapstructure:"timeout"` // 单任务超时（秒），兼容旧配置
 }
 
 func DefaultConfig() *Config {
 	return &Config{
+		App: AppConfig{
+			Name:    "CrabCoder",
+			Version: "0.1.0",
+			DataDir: "~/.crabcoder",
+		},
 		Model: ModelConfig{
-			Provider: "",
-			Model:    "claude-sonnet-4-6",
+			RoutingMode: "auto",
+			Provider:    "",
+			Model:       "claude-sonnet-4-6",
+			Temperature: 0.7,
+			MaxTokens:   4096,
+			TopP:        1.0,
+		},
+		Ollama: OllamaConfig{
+			BaseURL: "http://localhost:11434",
+			Model:   "llama3",
 		},
 		Security: SecurityConfig{
 			Mode: "strict",
 		},
-		Executor: ExecutorConfig{
+		Tools: ToolsConfig{
+			Shell: ShellConfig{
+				Timeout:   300,
+				MaxOutput: 1048576,
+			},
+			Sandbox: SandboxConfig{
+				Enabled:    true,
+				Network:    false,
+				Filesystem: "workspace",
+			},
+		},
+		Logging: LoggingConfig{
+			Level:  "info",
+			Format: "json",
+			Output: "~/.crabcoder/logs/crabcoder.log",
+		},
+		IDE: IDEConfig{
+			AutoDownload:  true,
+			UpdateChannel: "stable",
+		},
+		Timeout: TimeoutConfig{
+			LLM: LLMTimeoutConfig{
+				SoftTimeout: 30 * time.Second,
+				HardTimeout: 120 * time.Second,
+				StreamIdle:  10 * time.Second,
+			},
+			Tool: ToolTimeoutConfig{
+				SoftTimeout: 60 * time.Second,
+				HardTimeout: 300 * time.Second,
+				OutputIdle:  30 * time.Second,
+			},
+			Confirm: ConfirmTimeoutConfig{
+				Timeout:  300 * time.Second,
+				Reminder: 60 * time.Second,
+			},
+			Global: GlobalTimeoutConfig{
+				DAGTimeout:       1800 * time.Second,
+				WatchdogInterval: 5 * time.Second,
+			},
+		},
+		Execution: ExecutionConfig{
 			Workers: 4,
 			Timeout: 300,
 		},
@@ -49,7 +184,13 @@ func DefaultConfig() *Config {
 			"opus":   "claude-opus-4-6",
 			"sonnet": "claude-sonnet-4-6",
 			"haiku":  "claude-haiku-4-5-20251213",
-			"deepseek": "deepseek-chat",
+		},
+		ModelPrefixMap: map[string]string{
+			"claude": "anthropic",
+			"gpt":    "openai",
+			"grok":   "xai",
+			"ollama": "ollama",
+			"llama":  "ollama",
 		},
 	}
 }
@@ -118,15 +259,17 @@ const (
 	ProviderAnthropic ProviderKind = "anthropic"
 	ProviderOpenAI    ProviderKind = "openai"
 	ProviderDeepSeek  ProviderKind = "deepseek"
+	ProviderOllama    ProviderKind = "ollama"
 )
 
-// DetectProvider auto-detects the provider based on model name and environment.
+// DetectProvider auto-detects the provider based on model name, environment, and prefix map.
 func (c *Config) DetectProvider() ProviderKind {
+	// 1. Explicit provider in config
 	if c.Model.Provider != "" {
 		return ProviderKind(c.Model.Provider)
 	}
 
-	// Provider detection: check env vars, then model name prefix
+	// 2. Check env vars
 	if os.Getenv("ANTHROPIC_API_KEY") != "" {
 		return ProviderAnthropic
 	}
@@ -134,7 +277,12 @@ func (c *Config) DetectProvider() ProviderKind {
 		return ProviderOpenAI
 	}
 
+	// 3. Model prefix detection
 	model := strings.ToLower(c.Model.Model)
+	if kind, ok := c.ModelPrefixMap["model"]; ok {
+		return ProviderKind(kind)
+	}
+
 	if strings.HasPrefix(model, "claude") {
 		return ProviderAnthropic
 	}
@@ -143,6 +291,9 @@ func (c *Config) DetectProvider() ProviderKind {
 	}
 	if strings.HasPrefix(model, "gpt") || strings.HasPrefix(model, "o") {
 		return ProviderOpenAI
+	}
+	if strings.HasPrefix(model, "llama") || strings.HasPrefix(model, "ollama") {
+		return ProviderOllama
 	}
 
 	return ProviderAnthropic

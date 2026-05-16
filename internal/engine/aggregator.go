@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/crabcoder/crabcoder/internal/provider"
+	"github.com/crabcoder/crabcoder/internal/llm"
 	"github.com/crabcoder/crabcoder/pkg/model"
 )
 
 type Aggregator struct {
-	llm provider.LLMProvider
+	llm llm.LLMProvider
 }
 
-func NewAggregator(llm provider.LLMProvider) *Aggregator {
+func NewAggregator(llm llm.LLMProvider) *Aggregator {
 	return &Aggregator{llm: llm}
 }
 
@@ -32,8 +32,8 @@ func (a *Aggregator) Aggregate(ctx context.Context, userRequest string, tasks []
 				output += "\nError: " + t.Result.Error
 			}
 		}
-		if t.Error != "" && t.Result == nil {
-			output = "Error: " + t.Error
+		if t.Error != nil && t.Result == nil {
+			output = "Error: " + t.Error.Error()
 		}
 		parts = append(parts, fmt.Sprintf("- Task %s (%s): %s\n  Output: %s",
 			t.ID, status, t.Description, strings.TrimSpace(output)))

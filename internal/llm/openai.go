@@ -1,4 +1,4 @@
-package provider
+package llm
 
 import (
 	"bufio"
@@ -25,6 +25,17 @@ func NewOpenAIProvider(apiKey, baseURL, model string) *OpenAIProvider {
 		baseURL: baseURL,
 		model:   model,
 		client:  &http.Client{},
+	}
+}
+
+func (p *OpenAIProvider) GetName() string { return p.model }
+
+func (p *OpenAIProvider) GetTools() []model.ToolDefinition {
+	return []model.ToolDefinition{
+		{Name: "read_file", Description: "Read a file from the local filesystem"},
+		{Name: "write_file", Description: "Write a file to the local filesystem"},
+		{Name: "edit_file", Description: "Perform exact string replacements in an existing file"},
+		{Name: "bash", Description: "Execute a shell command"},
 	}
 }
 
@@ -99,8 +110,8 @@ type openAIError struct {
 
 // --- Chat ---
 
-func (p *OpenAIProvider) Chat(ctx context.Context, messages []model.Message, tools []model.ToolDefinition) (*ChatResponse, error) {
-	reqBody := p.buildRequest(messages, tools, false)
+func (p *OpenAIProvider) Chat(ctx context.Context, messages []model.Message, opts *ChatOptions) (*ChatResponse, error) {
+	reqBody := p.buildRequest(messages, opts, false)
 
 	body, _ := json.Marshal(reqBody)
 	req, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/chat/completions", bytes.NewReader(body))
@@ -134,8 +145,8 @@ func (p *OpenAIProvider) Chat(ctx context.Context, messages []model.Message, too
 
 // --- StreamChat ---
 
-func (p *OpenAIProvider) StreamChat(ctx context.Context, messages []model.Message, tools []model.ToolDefinition) (<-chan StreamChunk, error) {
-	reqBody := p.buildRequest(messages, tools, true)
+func (p *OpenAIProvider) StreamChat(ctx context.Context, messages []model.Message, opts *ChatOptions) (<-chan ChatChunk, error) {
+	reqBody := p.buildRequest(messages, opts, true)
 
 	body, _ := json.Marshal(reqBody)
 	req, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/chat/completions", bytes.NewReader(body))
@@ -151,7 +162,7 @@ func (p *OpenAIProvider) StreamChat(ctx context.Context, messages []model.Messag
 		return nil, err
 	}
 
-	ch := make(chan StreamChunk, 64)
+	ch := make(chan ChatChunk, 64)
 	go func() {
 		defer resp.Body.Close()
 		defer close(ch)
@@ -163,7 +174,7 @@ func (p *OpenAIProvider) StreamChat(ctx context.Context, messages []model.Messag
 
 // --- Helpers ---
 
-func (p *OpenAIProvider) buildRequest(messages []model.Message, tools []model.ToolDefinition, stream bool) openAIRequest {
+func (p *OpenAIProvider) buildRequest(messages []model.Message, opts *ChatOptions, stream bool) openAIRequest {
 	var openAIMsgs []openAIMessage
 	for _, msg := range messages {
 		om := openAIMessage{
@@ -175,7 +186,7 @@ func (p *OpenAIProvider) buildRequest(messages []model.Message, tools []model.To
 	}
 
 	var openAITools []openAITool
-	for _, t := range tools {
+	for _, t := range opts.Tools {
 		ot := openAITool{
 			Type: "function",
 			Function: openAIToolFunction{
@@ -229,7 +240,7 @@ func (p *OpenAIProvider) toResponse(or openAIResponse) *ChatResponse {
 	return resp
 }
 
-func (p *OpenAIProvider) readSSE(r io.Reader, ch chan<- StreamChunk) {
+func (p *OpenAIProvider) readSSE(r io.Reader, ch chan<- ChatChunk) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
@@ -265,10 +276,10 @@ func (p *OpenAIProvider) readSSE(r io.Reader, ch chan<- StreamChunk) {
 		}
 		delta := chunk.Choices[0].Delta
 		if delta.Content != "" {
-			ch <- StreamChunk{Content: delta.Content}
+			ch <- ChatChunk{Content: delta.Content}
 		}
 		for _, tc := range delta.ToolCalls {
-			ch <- StreamChunk{
+			ch <- ChatChunk{
 				ToolCallID:   tc.ID,
 				ToolCallName: tc.Function.Name,
 				ToolCallArgs: tc.Function.Arguments,
@@ -276,5 +287,5 @@ func (p *OpenAIProvider) readSSE(r io.Reader, ch chan<- StreamChunk) {
 		}
 	}
 
-	ch <- StreamChunk{Done: true}
+	ch <- ChatChunk{Done: true}
 }

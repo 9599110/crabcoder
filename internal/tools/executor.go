@@ -1,4 +1,4 @@
-package tool
+package tools
 
 import (
 	"context"
@@ -30,9 +30,9 @@ func (r RiskLevel) String() string {
 	}
 }
 
-type Executor interface {
+type ToolExecutor interface {
 	Execute(ctx context.Context, args map[string]any) (*model.TaskResult, error)
 	Validate(args map[string]any) error
-	Definition() model.ToolDefinition
-	RiskLevel() RiskLevel
+	GetDefinition() model.ToolDefinition
+	GetRiskLevel() RiskLevel
 }

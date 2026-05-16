@@ -1,4 +1,4 @@
-package tool
+package tools
 
 import (
 	"context"
@@ -54,7 +54,7 @@ func (e *ReadFileExecutor) Validate(args map[string]any) error {
 	return nil
 }
 
-func (e *ReadFileExecutor) Definition() model.ToolDefinition {
+func (e *ReadFileExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "read_file",
 		Description: "Read a file from the local filesystem.",
@@ -70,7 +70,7 @@ func (e *ReadFileExecutor) Definition() model.ToolDefinition {
 	}
 }
 
-func (e *ReadFileExecutor) RiskLevel() RiskLevel { return RiskLow }
+func (e *ReadFileExecutor) GetRiskLevel() RiskLevel { return RiskLow }
 
 // --- write_file ---
 
@@ -106,7 +106,7 @@ func (e *WriteFileExecutor) Validate(args map[string]any) error {
 	return nil
 }
 
-func (e *WriteFileExecutor) Definition() model.ToolDefinition {
+func (e *WriteFileExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "write_file",
 		Description: "Write a file to the local filesystem.",
@@ -121,7 +121,7 @@ func (e *WriteFileExecutor) Definition() model.ToolDefinition {
 	}
 }
 
-func (e *WriteFileExecutor) RiskLevel() RiskLevel { return RiskMedium }
+func (e *WriteFileExecutor) GetRiskLevel() RiskLevel { return RiskMedium }
 
 // --- edit_file ---
 
@@ -173,7 +173,7 @@ func (e *EditFileExecutor) Validate(args map[string]any) error {
 	return nil
 }
 
-func (e *EditFileExecutor) Definition() model.ToolDefinition {
+func (e *EditFileExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "edit_file",
 		Description: "Performs exact string replacements in an existing file.",
@@ -190,7 +190,7 @@ func (e *EditFileExecutor) Definition() model.ToolDefinition {
 	}
 }
 
-func (e *EditFileExecutor) RiskLevel() RiskLevel { return RiskMedium }
+func (e *EditFileExecutor) GetRiskLevel() RiskLevel { return RiskMedium }
 
 func baseName(path string) string {
 	for i := len(path) - 1; i >= 0; i-- {

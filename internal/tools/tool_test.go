@@ -1,4 +1,4 @@
-package tool
+package tools
 
 import (
 	"context"
@@ -164,30 +164,27 @@ func TestShellExecute(t *testing.T) {
 }
 
 func TestToolRegistry(t *testing.T) {
-	reg := NewRegistry()
+	reg := NewToolRegistry()
 
 	exec := &ReadFileExecutor{}
-	if err := reg.Register(exec); err != nil {
+	if err := reg.Register(exec.GetDefinition().Name, exec); err != nil {
 		t.Fatal(err)
 	}
 
 	// Duplicate registration
-	if err := reg.Register(exec); err == nil {
+	if err := reg.Register(exec.GetDefinition().Name, exec); err == nil {
 		t.Fatal("expected duplicate registration error")
 	}
 
 	// Get
-	got, ok := reg.Get("read_file")
-	if !ok {
-		t.Fatal("expected to find read_file")
-	}
+	got := reg.Get("read_file")
 	if got == nil {
-		t.Fatal("expected non-nil executor")
+		t.Fatal("expected to find read_file")
 	}
 
 	// Get nonexistent
-	_, ok = reg.Get("nonexistent")
-	if ok {
+	got = reg.Get("nonexistent")
+	if got != nil {
 		t.Fatal("expected not found")
 	}
 

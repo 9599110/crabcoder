@@ -8,6 +8,7 @@ const (
 	TaskStarted      EventType = "task.started"
 	TaskCompleted    EventType = "task.completed"
 	TaskFailed       EventType = "task.failed"
+	TaskOutput       EventType = "task.output"
 	ProgressUpdate   EventType = "progress.update"
 	ApprovalRequired EventType = "approval.required"
 	SessionState     EventType = "session.state"

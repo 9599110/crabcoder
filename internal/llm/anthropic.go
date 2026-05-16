@@ -1,4 +1,4 @@
-package provider
+package llm
 
 import (
 	"bufio"
@@ -27,6 +27,17 @@ func NewAnthropicProvider(apiKey, baseURL, model string) *AnthropicProvider {
 		baseURL: baseURL,
 		model:   model,
 		client:  &http.Client{},
+	}
+}
+
+func (p *AnthropicProvider) GetName() string { return p.model }
+
+func (p *AnthropicProvider) GetTools() []model.ToolDefinition {
+	return []model.ToolDefinition{
+		{Name: "read_file", Description: "Read a file from the local filesystem"},
+		{Name: "write_file", Description: "Write a file to the local filesystem"},
+		{Name: "edit_file", Description: "Perform exact string replacements in an existing file"},
+		{Name: "bash", Description: "Execute a shell command"},
 	}
 }
 
@@ -95,8 +106,8 @@ type anthropicError struct {
 
 // --- Chat ---
 
-func (p *AnthropicProvider) Chat(ctx context.Context, messages []model.Message, tools []model.ToolDefinition) (*ChatResponse, error) {
-	reqBody := p.buildRequest(messages, tools, false)
+func (p *AnthropicProvider) Chat(ctx context.Context, messages []model.Message, opts *ChatOptions) (*ChatResponse, error) {
+	reqBody := p.buildRequest(messages, opts, false)
 
 	body, _ := json.Marshal(reqBody)
 	req, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/v1/messages", bytes.NewReader(body))
@@ -131,8 +142,8 @@ func (p *AnthropicProvider) Chat(ctx context.Context, messages []model.Message, 
 
 // --- StreamChat ---
 
-func (p *AnthropicProvider) StreamChat(ctx context.Context, messages []model.Message, tools []model.ToolDefinition) (<-chan StreamChunk, error) {
-	reqBody := p.buildRequest(messages, tools, true)
+func (p *AnthropicProvider) StreamChat(ctx context.Context, messages []model.Message, opts *ChatOptions) (<-chan ChatChunk, error) {
+	reqBody := p.buildRequest(messages, opts, true)
 
 	body, _ := json.Marshal(reqBody)
 	req, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/v1/messages", bytes.NewReader(body))
@@ -149,7 +160,7 @@ func (p *AnthropicProvider) StreamChat(ctx context.Context, messages []model.Mes
 		return nil, err
 	}
 
-	ch := make(chan StreamChunk, 64)
+	ch := make(chan ChatChunk, 64)
 	go func() {
 		defer resp.Body.Close()
 		defer close(ch)
@@ -161,7 +172,7 @@ func (p *AnthropicProvider) StreamChat(ctx context.Context, messages []model.Mes
 
 // --- Helpers ---
 
-func (p *AnthropicProvider) buildRequest(messages []model.Message, tools []model.ToolDefinition, stream bool) anthropicRequest {
+func (p *AnthropicProvider) buildRequest(messages []model.Message, opts *ChatOptions, stream bool) anthropicRequest {
 	var anthropicMsgs []anthropicMessage
 	for _, msg := range messages {
 		am := anthropicMessage{Role: string(msg.Role)}
@@ -184,7 +195,7 @@ func (p *AnthropicProvider) buildRequest(messages []model.Message, tools []model
 	}
 
 	var anthropicTools []anthropicTool
-	for _, t := range tools {
+	for _, t := range opts.Tools {
 		at := anthropicTool{
 			Name:        t.Name,
 			Description: t.Description,
@@ -244,7 +255,7 @@ func (p *AnthropicProvider) toResponse(ar anthropicResponse) *ChatResponse {
 	return resp
 }
 
-func (p *AnthropicProvider) readSSE(r io.Reader, ch chan<- StreamChunk) {
+func (p *AnthropicProvider) readSSE(r io.Reader, ch chan<- ChatChunk) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
@@ -283,13 +294,13 @@ func (p *AnthropicProvider) readSSE(r io.Reader, ch chan<- StreamChunk) {
 			}
 			json.Unmarshal([]byte(data), &delta)
 			if delta.Delta.Type == "text_delta" {
-				ch <- StreamChunk{Content: delta.Delta.Text}
+				ch <- ChatChunk{Content: delta.Delta.Text}
 			} else if delta.Delta.Type == "input_json_delta" {
-				ch <- StreamChunk{ToolCallArgs: delta.Delta.PartialJSON}
+				ch <- ChatChunk{ToolCallArgs: delta.Delta.PartialJSON}
 			}
 
 		case "message_stop":
-			ch <- StreamChunk{Done: true}
+			ch <- ChatChunk{Done: true}
 		}
 	}
 }

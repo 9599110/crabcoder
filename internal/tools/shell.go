@@ -1,4 +1,4 @@
-package tool
+package tools
 
 import (
 	"context"
@@ -53,7 +53,7 @@ func (e *ShellExecutor) Validate(args map[string]any) error {
 	return nil
 }
 
-func (e *ShellExecutor) Definition() model.ToolDefinition {
+func (e *ShellExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "bash",
 		Description: "Execute a shell command in the current workspace.",
@@ -69,4 +69,4 @@ func (e *ShellExecutor) Definition() model.ToolDefinition {
 	}
 }
 
-func (e *ShellExecutor) RiskLevel() RiskLevel { return RiskCritical }
+func (e *ShellExecutor) GetRiskLevel() RiskLevel { return RiskCritical }

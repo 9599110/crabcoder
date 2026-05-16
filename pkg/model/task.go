@@ -37,20 +37,9 @@ type Task struct {
 	Tool        string
 	ToolArgs    map[string]any
 	Result      *TaskResult
-	Error       string
+	Error       error
 	CreatedAt   time.Time
 	StartedAt   time.Time
 	CompletedAt time.Time
 }
 
-type TaskResult struct {
-	Success bool
-	Output  string
-	Error   string
-}
-
-type FileChange struct {
-	Path   string
-	Action string // created, modified, deleted
-	Lines  int
-}

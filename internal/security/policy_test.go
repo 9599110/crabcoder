@@ -4,17 +4,17 @@ import (
 	"context"
 	"testing"
 
-	"github.com/crabcoder/crabcoder/internal/tool"
+	"github.com/crabcoder/crabcoder/internal/tools"
 	"github.com/crabcoder/crabcoder/pkg/model"
 )
 
 func TestStrictMode(t *testing.T) {
 	p := NewPolicy(ModeStrict)
 
-	if !p.NeedsApproval(tool.RiskLow) {
+	if !p.NeedsApproval(tools.RiskLow) {
 		t.Fatal("strict should require approval for low risk")
 	}
-	if !p.NeedsApproval(tool.RiskCritical) {
+	if !p.NeedsApproval(tools.RiskCritical) {
 		t.Fatal("strict should require approval for critical risk")
 	}
 }
@@ -22,13 +22,13 @@ func TestStrictMode(t *testing.T) {
 func TestAutoLowMode(t *testing.T) {
 	p := NewPolicy(ModeAutoLow)
 
-	if p.NeedsApproval(tool.RiskLow) {
+	if p.NeedsApproval(tools.RiskLow) {
 		t.Fatal("auto-low should auto-approve low risk")
 	}
-	if !p.NeedsApproval(tool.RiskMedium) {
+	if !p.NeedsApproval(tools.RiskMedium) {
 		t.Fatal("auto-low should require approval for medium risk")
 	}
-	if !p.NeedsApproval(tool.RiskCritical) {
+	if !p.NeedsApproval(tools.RiskCritical) {
 		t.Fatal("auto-low should require approval for critical risk")
 	}
 }
@@ -36,10 +36,10 @@ func TestAutoLowMode(t *testing.T) {
 func TestAutoAllMode(t *testing.T) {
 	p := NewPolicy(ModeAutoAll)
 
-	if p.NeedsApproval(tool.RiskLow) {
+	if p.NeedsApproval(tools.RiskLow) {
 		t.Fatal("auto-all should auto-approve low risk")
 	}
-	if p.NeedsApproval(tool.RiskCritical) {
+	if p.NeedsApproval(tools.RiskCritical) {
 		t.Fatal("auto-all should auto-approve critical risk")
 	}
 }
@@ -60,7 +60,7 @@ func (m *mockCriticalExecutor) Execute(_ context.Context, _ map[string]any) (*mo
 	return nil, nil
 }
 func (m *mockCriticalExecutor) Validate(_ map[string]any) error { return nil }
-func (m *mockCriticalExecutor) Definition() model.ToolDefinition {
+func (m *mockCriticalExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{Name: "bash", Description: "mock"}
 }
-func (m *mockCriticalExecutor) RiskLevel() tool.RiskLevel { return tool.RiskCritical }
+func (m *mockCriticalExecutor) GetRiskLevel() tools.RiskLevel { return tools.RiskCritical }

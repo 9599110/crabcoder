@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
-	"github.com/crabcoder/crabcoder/internal/provider"
+	"github.com/crabcoder/crabcoder/internal/llm"
 	"github.com/crabcoder/crabcoder/pkg/model"
 )
 
@@ -22,10 +23,10 @@ type taskListJSON struct {
 }
 
 type Parser struct {
-	llm provider.LLMProvider
+	llm llm.LLMProvider
 }
 
-func NewParser(llm provider.LLMProvider) *Parser {
+func NewParser(llm llm.LLMProvider) *Parser {
 	return &Parser{llm: llm}
 }
 
@@ -94,11 +95,11 @@ func extractJSON(content string) string {
 			start := i + 7
 			for j := start; j < len(content)-2; j++ {
 				if content[j:j+3] == "```" {
-					return content[start:j]
+					return strings.TrimSpace(content[start:j])
 				}
 			}
 		}
 	}
-	// No code fences — return raw content
-	return content
+	// No code fences — return trimmed content
+	return strings.TrimSpace(content)
 }

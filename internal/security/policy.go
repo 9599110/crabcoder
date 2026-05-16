@@ -1,6 +1,6 @@
 package security
 
-import "github.com/crabcoder/crabcoder/internal/tool"
+import "github.com/crabcoder/crabcoder/internal/tools"
 
 type Mode string
 
@@ -26,12 +26,12 @@ func NewPolicy(mode Mode) *Policy {
 
 // NeedsApproval returns true if the engine should pause and ask the user
 // before executing a tool at the given risk level.
-func (p *Policy) NeedsApproval(risk tool.RiskLevel) bool {
+func (p *Policy) NeedsApproval(risk tools.RiskLevel) bool {
 	switch p.Mode {
 	case ModeStrict:
 		return true
 	case ModeAutoLow:
-		return risk > tool.RiskLow
+		return risk > tools.RiskLow
 	case ModeAutoAll:
 		return false
 	case ModePlan:

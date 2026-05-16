@@ -3,7 +3,7 @@ package security
 import (
 	"strings"
 
-	"github.com/crabcoder/crabcoder/internal/tool"
+	"github.com/crabcoder/crabcoder/internal/tools"
 )
 
 type Assessor struct {
@@ -31,31 +31,31 @@ func NewAssessor(policy *Policy) *Assessor {
 
 // Assess determines the actual risk level of a tool call.
 // For shell commands, it checks for dangerous patterns.
-func (a *Assessor) Assess(executor tool.Executor, args map[string]any) tool.RiskLevel {
-	baseRisk := executor.RiskLevel()
+func (a *Assessor) Assess(executor tools.ToolExecutor, args map[string]any) tools.RiskLevel {
+	baseRisk := executor.GetRiskLevel()
 
 	// For shell commands, check for dangerous patterns
-	if executor.Definition().Name == "bash" {
+	if executor.GetDefinition().Name == "bash" {
 		cmd, _ := args["command"].(string)
 		if a.isBlocked(cmd) {
-			return tool.RiskCritical
+			return tools.RiskCritical
 		}
 		if strings.Contains(cmd, "sudo") || strings.Contains(cmd, "rm -rf") {
-			return tool.RiskCritical
+			return tools.RiskCritical
 		}
 		if strings.Contains(cmd, "rm ") {
-			return tool.RiskHigh
+			return tools.RiskHigh
 		}
 		if strings.Contains(cmd, "curl") && strings.Contains(cmd, "|") {
-			return tool.RiskHigh
+			return tools.RiskHigh
 		}
 	}
 
 	// Write operations outside workspace could increase risk
-	if baseRisk >= tool.RiskMedium && a.policy.WorkDir != "" {
+	if baseRisk >= tools.RiskMedium && a.policy.WorkDir != "" {
 		path, _ := args["path"].(string)
 		if path != "" && !strings.HasPrefix(path, a.policy.WorkDir) {
-			return tool.RiskHigh
+			return tools.RiskHigh
 		}
 	}
 
