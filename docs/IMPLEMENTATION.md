@@ -382,9 +382,9 @@ func DetectProvider(model string, cfg ModelConfig) ProviderKind {
 
 | # | 文件 | 状态 | 说明 |
 |---|------|------|------|
-| 4.1 | `internal/security/policy.go` | ⬜ | RiskLevel 定义 + SecurityPolicy |
-| 4.2 | `internal/security/assessor.go` | ⬜ | 风险评估器 |
-| 4.3 | `internal/security/approval.go` | ⬜ | 审批决策器 |
+| 4.1 | `internal/security/policy.go` | ✅ | Policy (strict/plan/auto-low/auto-all) + NeedsApproval |
+| 4.2 | `internal/security/assessor.go` | ✅ | Assessor: shell pattern detection, workspace boundary check |
+| 4.3 | `internal/security/approval.go` | ✅ | Decider: Decide(executor, args) → ApprovalDecision |
 
 ### Phase 5: 调度器（L4 编排层）
 
