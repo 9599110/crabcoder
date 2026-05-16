@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -277,6 +278,12 @@ var slashCommands = []struct {
 	{"/init", "初始化项目上下文文件 (.crabcoder/CONTEXT.md)", "builtin"},
 	{"/exit", "退出会话", "builtin"},
 	{"/quit", "退出会话", "builtin"},
+}
+
+func init() {
+	sort.Slice(slashCommands, func(i, j int) bool {
+		return len(slashCommands[i].cmd) < len(slashCommands[j].cmd)
+	})
 }
 
 func showSlashHelp(input string) {
