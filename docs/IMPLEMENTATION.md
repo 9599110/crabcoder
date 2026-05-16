@@ -398,10 +398,10 @@ func DetectProvider(model string, cfg ModelConfig) ProviderKind {
 
 | # | 文件 | 状态 | 说明 |
 |---|------|------|------|
-| 6.1 | `internal/engine/session.go` | ⬜ | Session 状态机 (IDLE→...→COMPLETED) |
-| 6.2 | `internal/engine/parser.go` | ⬜ | 任务分解（调用 LLM 生成 JSON task list） |
-| 6.3 | `internal/engine/aggregator.go` | ⬜ | 结果汇总（调用 LLM 生成自然语言） |
-| 6.4 | `internal/engine/engine.go` | ⬜ | Engine 实现（ProcessRequest / ProcessChat） |
+| 6.1 | `internal/engine/session.go` | ✅ | Session state machine (7 states, thread-safe transitions) |
+| 6.2 | `internal/engine/parser.go` | ✅ | Task decomposition: LLM → JSON → []Task |
+| 6.3 | `internal/engine/aggregator.go` | ✅ | Result aggregation: LLM → natural language summary |
+| 6.4 | `internal/engine/engine.go` | ✅ | Engine: ProcessRequest (Path A), ProcessChat (Path B), NewEngine DI |
 
 ### Phase 7: CLI 入口（L5 应用层）
 
