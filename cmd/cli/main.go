@@ -31,11 +31,12 @@ func main() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "crabcoder",
+	Use:   "crab",
 	Short: "CrabCoder - AI-powered coding assistant with task decomposition",
 	Long: `CrabCoder breaks complex programming tasks into independent subtasks,
 executes them concurrently, and aggregates the results.`,
 	Version: fmt.Sprintf("%s (built %s)", Version, BuildTime),
+	RunE: runChat, // default to chat mode when no subcommand
 }
 
 var askCmd = &cobra.Command{
