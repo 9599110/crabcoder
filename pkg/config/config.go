@@ -49,6 +49,7 @@ func DefaultConfig() *Config {
 			"opus":   "claude-opus-4-6",
 			"sonnet": "claude-sonnet-4-6",
 			"haiku":  "claude-haiku-4-5-20251213",
+			"deepseek": "deepseek-chat",
 		},
 	}
 }
@@ -106,6 +107,9 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("ANTHROPIC_API_KEY"); v != "" && cfg.Model.APIKey == "" {
 		cfg.Model.APIKey = v
 	}
+	if v := os.Getenv("DEEPSEEK_API_KEY"); v != "" && cfg.Model.APIKey == "" {
+		cfg.Model.APIKey = v
+	}
 }
 
 type ProviderKind string
@@ -113,6 +117,7 @@ type ProviderKind string
 const (
 	ProviderAnthropic ProviderKind = "anthropic"
 	ProviderOpenAI    ProviderKind = "openai"
+	ProviderDeepSeek  ProviderKind = "deepseek"
 )
 
 // DetectProvider auto-detects the provider based on model name and environment.
@@ -132,6 +137,9 @@ func (c *Config) DetectProvider() ProviderKind {
 	model := strings.ToLower(c.Model.Model)
 	if strings.HasPrefix(model, "claude") {
 		return ProviderAnthropic
+	}
+	if strings.HasPrefix(model, "deepseek") {
+		return ProviderDeepSeek
 	}
 	if strings.HasPrefix(model, "gpt") || strings.HasPrefix(model, "o") {
 		return ProviderOpenAI

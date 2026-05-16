@@ -29,6 +29,21 @@ func NewFromConfig(cfg *config.Config) (LLMProvider, error) {
 		}
 		return NewOpenAIProvider(apiKey, baseURL, model), nil
 
+	case config.ProviderDeepSeek:
+		if apiKey == "" {
+			apiKey = os.Getenv("DEEPSEEK_API_KEY")
+		}
+		if apiKey == "" {
+			return nil, fmt.Errorf("DeepSeek API key not set (set DEEPSEEK_API_KEY or api_key in config)")
+		}
+		if baseURL == "" {
+			baseURL = os.Getenv("DEEPSEEK_BASE_URL")
+		}
+		if baseURL == "" {
+			baseURL = "https://api.deepseek.com/v1"
+		}
+		return NewOpenAIProvider(apiKey, baseURL, model), nil
+
 	case config.ProviderAnthropic:
 		if apiKey == "" {
 			apiKey = os.Getenv("ANTHROPIC_API_KEY")
