@@ -10,8 +10,8 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Model.Model != "claude-sonnet-4-6" {
 		t.Errorf("expected default model claude-sonnet-4-6, got %s", cfg.Model.Model)
 	}
-	if cfg.Security.Mode != "strict" {
-		t.Errorf("expected strict mode, got %s", cfg.Security.Mode)
+	if cfg.Security.Mode != "auto-all" {
+		t.Errorf("expected auto-all mode, got %s", cfg.Security.Mode)
 	}
 	if cfg.Tools.Shell.Timeout != 300 {
 		t.Errorf("expected 300s timeout, got %d", cfg.Tools.Shell.Timeout)

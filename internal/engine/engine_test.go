@@ -80,21 +80,30 @@ func TestProcessChat_NoToolCalls(t *testing.T) {
 
 func TestProcessChat_SecurityBlocksTool(t *testing.T) {
 	reg := tools.NewToolRegistry()
-	reg.Register("unknown", &tools.ReadFileExecutor{})
+	reg.Register("read_file", &tools.ReadFileExecutor{})
 
 	callCount := 0
 	mock := &mockLLM{
 		chatFn: func(ctx context.Context, messages []model.Message, opts *llm.ChatOptions) (*llm.ChatResponse, error) {
 			callCount++
-			if callCount == 1 {
+			switch callCount {
+			case 1: // Phase 1: preview tools
+				return &llm.ChatResponse{
+					Content: "Let me read that file.",
+					ToolCalls: []llm.ToolCall{
+						{ID: "call_1", Name: "read_file", Args: map[string]any{}},
+					},
+				}, nil
+			case 2: // Phase 2: full definition, tool blocked
 				return &llm.ChatResponse{
 					Content: "Let me read that file.",
 					ToolCalls: []llm.ToolCall{
 						{ID: "call_1", Name: "read_file", Args: map[string]any{"path": "/etc/passwd"}},
 					},
 				}, nil
+			default:
+				return &llm.ChatResponse{Content: "I cannot read that file."}, nil
 			}
-			return &llm.ChatResponse{Content: "I cannot read that file."}, nil
 		},
 	}
 
@@ -114,22 +123,31 @@ func TestProcessChat_SecurityBlocksTool(t *testing.T) {
 
 func TestProcessChat_ToolLoop(t *testing.T) {
 	reg := tools.NewToolRegistry()
-	reg.Register("unknown", &tools.ReadFileExecutor{})
+	reg.Register("read_file", &tools.ReadFileExecutor{})
 	bus := event.NewBus()
 
 	callCount := 0
 	mock := &mockLLM{
 		chatFn: func(ctx context.Context, messages []model.Message, opts *llm.ChatOptions) (*llm.ChatResponse, error) {
 			callCount++
-			if callCount == 1 {
+			switch callCount {
+			case 1: // Phase 1: preview tools
+				return &llm.ChatResponse{
+					Content: "Let me check that file.",
+					ToolCalls: []llm.ToolCall{
+						{ID: "call_1", Name: "read_file", Args: map[string]any{}},
+					},
+				}, nil
+			case 2: // Phase 2: full definition, proper args
 				return &llm.ChatResponse{
 					Content: "Let me check that file.",
 					ToolCalls: []llm.ToolCall{
 						{ID: "call_1", Name: "read_file", Args: map[string]any{"path": "README.md"}},
 					},
 				}, nil
+			default: // Next round: text response
+				return &llm.ChatResponse{Content: "The file contains project documentation."}, nil
 			}
-			return &llm.ChatResponse{Content: "The file contains project documentation."}, nil
 		},
 	}
 

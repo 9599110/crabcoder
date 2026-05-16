@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/crabcoder/crabcoder/pkg/model"
 )
@@ -24,7 +25,7 @@ func NewOpenAIProvider(apiKey, baseURL, model string) *OpenAIProvider {
 		apiKey:  apiKey,
 		baseURL: baseURL,
 		model:   model,
-		client:  &http.Client{},
+		client:  &http.Client{Timeout: 120 * time.Second},
 	}
 }
 
@@ -43,7 +44,7 @@ func (p *OpenAIProvider) GetTools() []model.ToolDefinition {
 
 type openAIMessage struct {
 	Role             string          `json:"role"`
-	Content          string          `json:"content,omitempty"`
+	Content          string          `json:"content"`
 	ReasoningContent string          `json:"reasoning_content,omitempty"`
 	ToolCallID       string          `json:"tool_call_id,omitempty"`
 	ToolCalls        []openAIToolCall `json:"tool_calls,omitempty"`

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/crabcoder/crabcoder/pkg/model"
 )
@@ -26,7 +27,7 @@ func NewAnthropicProvider(apiKey, baseURL, model string) *AnthropicProvider {
 		apiKey:  apiKey,
 		baseURL: baseURL,
 		model:   model,
-		client:  &http.Client{},
+		client:  &http.Client{Timeout: 120 * time.Second},
 	}
 }
 

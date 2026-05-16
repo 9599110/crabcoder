@@ -1,13 +1,12 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/spf13/viper"
 )
 
 type Config struct {
@@ -134,7 +133,7 @@ func DefaultConfig() *Config {
 			Model:   "llama3",
 		},
 		Security: SecurityConfig{
-			Mode: "strict",
+			Mode: "auto-all",
 		},
 		Tools: ToolsConfig{
 			Shell: ShellConfig{
@@ -200,21 +199,21 @@ func DefaultConfig() *Config {
 func Load() (*Config, error) {
 	cfg := DefaultConfig()
 
-	// 1. User-level config (~/.crabcoder/config.yaml)
+	// 1. User-level config (~/.crabcoder/settings.json)
 	home, err := os.UserHomeDir()
 	if err == nil {
-		userPath := filepath.Join(home, ".crabcoder", "config.yaml")
+		userPath := filepath.Join(home, ".crabcoder", "settings.json")
 		if _, err := os.Stat(userPath); err == nil {
-			if err := mergeConfig(userPath, cfg); err != nil {
+			if err := mergeJSONConfig(userPath, cfg); err != nil {
 				return nil, fmt.Errorf("loading user config: %w", err)
 			}
 		}
 	}
 
-	// 2. Project-level config (./.crabcoder/config.yaml) overrides user
-	projectPath := filepath.Join(".crabcoder", "config.yaml")
+	// 2. Project-level config (./.crabcoder/settings.json) overrides user
+	projectPath := filepath.Join(".crabcoder", "settings.json")
 	if _, err := os.Stat(projectPath); err == nil {
-		if err := mergeConfig(projectPath, cfg); err != nil {
+		if err := mergeJSONConfig(projectPath, cfg); err != nil {
 			return nil, fmt.Errorf("loading project config: %w", err)
 		}
 	}
@@ -230,19 +229,72 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-func mergeConfig(path string, cfg *Config) error {
-	v := viper.New()
-	v.SetConfigFile(path)
-	v.SetConfigType("yaml")
-	if err := v.ReadInConfig(); err != nil {
+// settingsFile is the crab-code compatible settings.json structure.
+type settingsFile struct {
+	Aliases           map[string]string    `json:"aliases"`
+	ProviderFallbacks *providerFallbackCfg `json:"providerFallbacks"`
+	Model             string               `json:"model"`
+	Security          *struct {
+		Mode string `json:"mode"`
+	} `json:"security"`
+}
+
+type providerFallbackCfg struct {
+	Primary   string   `json:"primary"`
+	Fallbacks []string `json:"fallbacks"`
+}
+
+// mergeJSONConfig merges a crab-code style settings.json into the Config.
+func mergeJSONConfig(path string, cfg *Config) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
 		return err
 	}
-	return v.Unmarshal(cfg)
+
+	var sf settingsFile
+	if err := json.Unmarshal(data, &sf); err != nil {
+		return fmt.Errorf("parsing %s: %w", path, err)
+	}
+
+	// Merge aliases
+	if sf.Aliases != nil {
+		if cfg.Aliases == nil {
+			cfg.Aliases = make(map[string]string)
+		}
+		for k, v := range sf.Aliases {
+			cfg.Aliases[k] = v
+		}
+	}
+
+	// Apply provider fallbacks
+	if sf.ProviderFallbacks != nil {
+		if sf.ProviderFallbacks.Primary != "" {
+			cfg.Model.Model = sf.ProviderFallbacks.Primary
+		}
+		if len(sf.ProviderFallbacks.Fallbacks) > 0 {
+			cfg.FallbackModels = sf.ProviderFallbacks.Fallbacks
+		}
+	}
+
+	// Direct model override
+	if sf.Model != "" {
+		cfg.Model.Model = sf.Model
+	}
+
+	// Security mode override
+	if sf.Security != nil && sf.Security.Mode != "" {
+		cfg.Security.Mode = sf.Security.Mode
+	}
+
+	return nil
 }
 
 func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("CRABCODER_MODEL"); v != "" {
 		cfg.Model.Model = v
+	}
+	if v := os.Getenv("CRABCODER_SECURITY_MODE"); v != "" {
+		cfg.Security.Mode = v
 	}
 	if v := os.Getenv("OPENAI_API_KEY"); v != "" && cfg.Model.APIKey == "" {
 		cfg.Model.APIKey = v

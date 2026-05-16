@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -184,18 +185,22 @@ func runChat(cmd *cobra.Command, args []string) error {
 		sessionID = fmt.Sprintf("chat-%d", time.Now().UnixNano())
 		messages = append(messages, model.Message{
 			Role:    model.RoleSystem,
-			Content: "You are an interactive agent that helps users with software engineering tasks. Use tools to read, edit, and execute code.",
+			Content: "You are an interactive agent that helps users with software engineering tasks. You MUST use tools (read_file, write_file, edit_file, bash, grep, glob) to read actual code before making changes. Never guess or fabricate code. Always read files first, then edit. Reply in the same language the user uses (Chinese → Chinese, English → English).",
 		})
 	}
 
 	fmt.Printf("CrabCoder coding agent  model=%s  session=%s  (type /exit to quit)\n", cfg.Model.Model, truncateID(sessionID))
 	fmt.Println()
 
+	scanner := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Print("> ")
-		var input string
-		if _, err := fmt.Scanln(&input); err != nil {
+		if !scanner.Scan() {
 			break
+		}
+		input := strings.TrimSpace(scanner.Text())
+		if input == "" {
+			continue
 		}
 		if input == "/exit" || input == "/quit" {
 			break
@@ -273,4 +278,26 @@ func registerTools(r *tools.ToolRegistry) {
 	r.Register("bash", &tools.ShellExecutor{DefaultTimeout: 30 * time.Second})
 	r.Register("grep", &tools.GrepExecutor{})
 	r.Register("glob", &tools.GlobExecutor{})
+	r.Register("web_fetch", &tools.WebFetchExecutor{})
+	r.Register("web_search", &tools.WebSearchExecutor{})
+	r.Register("task_create", &tools.TaskCreateExecutor{})
+	r.Register("task_list", &tools.TaskListExecutor{})
+	r.Register("task_get", &tools.TaskGetExecutor{})
+	r.Register("task_update", &tools.TaskUpdateExecutor{})
+	r.Register("task_stop", &tools.TaskStopExecutor{})
+	r.Register("task_output", &tools.TaskOutputExecutor{})
+	r.Register("ask_user", &tools.AskUserQuestionExecutor{})
+	r.Register("enter_plan_mode", &tools.EnterPlanModeExecutor{})
+	r.Register("exit_plan_mode", &tools.ExitPlanModeExecutor{})
+	r.Register("notebook_edit", &tools.NotebookEditExecutor{})
+	r.Register("todo_write", &tools.TodoWriteExecutor{})
+	r.Register("mcp", &tools.MCPExecutor{})
+	r.Register("list_mcp_resources", &tools.ListMcpResourcesExecutor{})
+	r.Register("mcp_auth", &tools.McpAuthExecutor{})
+	r.Register("read_mcp_resource", &tools.ReadMcpResourceExecutor{})
+	r.Register("skill", &tools.SkillExecutor{})
+	r.Register("lsp", &tools.LSPExecutor{})
+	r.Register("agent", &tools.AgentExecutor{})
+	r.Register("enter_worktree", &tools.EnterWorktreeExecutor{})
+	r.Register("exit_worktree", &tools.ExitWorktreeExecutor{})
 }

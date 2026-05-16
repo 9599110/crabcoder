@@ -153,7 +153,9 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 	totalToolCalls := 0
 
 	for round := 0; round < maxRounds; round++ {
-		resp, err := e.llm.Chat(ctx, history, &llm.ChatOptions{Tools: taskDefs})
+		// Phase 1: Send only tool previews (name+desc, no parameter details)
+		previewDefs := buildPreviewDefs(taskDefs)
+		resp, err := e.llm.Chat(ctx, history, &llm.ChatOptions{Tools: previewDefs})
 		if err != nil {
 			e.session.Transition(SessionError)
 			return nil, fmt.Errorf("chat: LLM call: %w", err)
@@ -173,13 +175,45 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 			}, nil
 		}
 
+		// Phase 2: Send full definitions only for the tools the LLM selected
+		var fullDefs []model.ToolDefinition
+		for _, tc := range resp.ToolCalls {
+			if exec := e.tools.Get(tc.Name); exec != nil {
+				fullDefs = append(fullDefs, exec.GetDefinition())
+			}
+		}
+		if len(fullDefs) == 0 {
+			history = append(history, model.Message{
+				Role:    model.RoleAssistant,
+				Content: resp.Content,
+			})
+			continue
+		}
+
+		detailResp, err := e.llm.Chat(ctx, history, &llm.ChatOptions{Tools: fullDefs})
+		if err != nil {
+			e.session.Transition(SessionError)
+			return nil, fmt.Errorf("chat: LLM detail call: %w", err)
+		}
+
+		execCalls := detailResp.ToolCalls
+		if len(execCalls) == 0 {
+			// LLM didn't produce tool calls with full defs, return text
+			e.session.Transition(SessionCompleted)
+			return &Response{
+				Text:          detailResp.Content,
+				TasksExecuted: totalToolCalls,
+				SessionID:     requestID,
+			}, nil
+		}
+
 		// Append assistant message (with tool calls) to history
 		assistantMsg := model.Message{
 			Role:      model.RoleAssistant,
-			Content:   resp.Content,
+			Content:   detailResp.Content,
 			Reasoning: resp.Reasoning,
 		}
-		for _, tc := range resp.ToolCalls {
+		for _, tc := range execCalls {
 			assistantMsg.ToolCalls = append(assistantMsg.ToolCalls, model.ToolCall{
 				ID:   tc.ID,
 				Name: tc.Name,
@@ -189,8 +223,8 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 		history = append(history, assistantMsg)
 
 		// Execute tool calls and collect results
-		totalToolCalls += len(resp.ToolCalls)
-		for _, tc := range resp.ToolCalls {
+		totalToolCalls += len(execCalls)
+		for _, tc := range execCalls {
 			exec := e.tools.Get(tc.Name)
 			if exec == nil {
 				history = append(history, model.Message{
@@ -204,6 +238,12 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 
 			decision := e.security.Decide(exec, tc.Args)
 			if !decision.Approved {
+				if decision.NeedsUserApproval {
+					userApproved := promptUserApproval(tc.Name, tc.Args, decision)
+					if userApproved {
+						goto executeTool
+					}
+				}
 				history = append(history, model.Message{
 					Role:       model.RoleTool,
 					Content:    fmt.Sprintf("blocked: %s (risk: %s)", decision.Message, decision.Risk),
@@ -212,6 +252,7 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 				})
 				continue
 			}
+		executeTool:
 
 			result, err := exec.Execute(ctx, tc.Args)
 			if err != nil || !result.Success {
@@ -270,6 +311,32 @@ func (e *engineImpl) Health() error {
 
 func (e *engineImpl) Session() *Session {
 	return e.session
+}
+
+func promptUserApproval(name string, args map[string]any, decision security.ApprovalDecision) bool {
+	fmt.Printf("\n  Proposed: %s (risk: %s)\n", name, decision.Risk)
+	for k, v := range args {
+		fmt.Printf("    %s: %v\n", k, v)
+	}
+	fmt.Printf("  %s\n  Approve? [y/N]: ", decision.Message)
+	var answer string
+	fmt.Scanln(&answer)
+	return answer == "y" || answer == "Y" || answer == "yes"
+}
+
+func buildPreviewDefs(defs []model.ToolDefinition) []model.ToolDefinition {
+	previews := make([]model.ToolDefinition, len(defs))
+	for i, d := range defs {
+		previews[i] = model.ToolDefinition{
+			Name:        d.Name,
+			Description: d.Description,
+			Parameters: model.ParameterSchema{
+				Type:       "object",
+				Properties: map[string]model.ParameterProperty{},
+			},
+		}
+	}
+	return previews
 }
 
 func countFailed(tasks []*model.Task) int {
