@@ -62,10 +62,11 @@ type openAIFunction struct {
 }
 
 type openAIRequest struct {
-	Model    string           `json:"model"`
-	Messages []openAIMessage  `json:"messages"`
-	Tools    []openAITool     `json:"tools,omitempty"`
-	Stream   bool             `json:"stream"`
+	Model      string           `json:"model"`
+	Messages   []openAIMessage  `json:"messages"`
+	Tools      []openAITool     `json:"tools,omitempty"`
+	Stream     bool             `json:"stream"`
+	ToolChoice string           `json:"tool_choice,omitempty"`
 }
 
 type openAITool struct {
@@ -238,12 +239,16 @@ func (p *OpenAIProvider) buildRequest(messages []model.Message, opts *ChatOption
 		openAITools = append(openAITools, ot)
 	}
 
-	return openAIRequest{
+	req := openAIRequest{
 		Model:    p.model,
 		Messages: openAIMsgs,
 		Tools:    openAITools,
 		Stream:   stream,
 	}
+	if len(openAITools) > 0 {
+		req.ToolChoice = "auto"
+	}
+	return req
 }
 
 func (p *OpenAIProvider) toResponse(or openAIResponse) *ChatResponse {

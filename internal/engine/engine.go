@@ -512,9 +512,10 @@ func buildCompactDefs(defs []model.ToolDefinition) []model.ToolDefinition {
 		}
 		for k, v := range d.Parameters.Properties {
 			compacts[i].Parameters.Properties[k] = model.ParameterProperty{
-				Type:  v.Type,
-				Enum:  v.Enum,
-				Items: v.Items,
+				Type:        v.Type,
+				Description: v.Description,
+				Enum:        v.Enum,
+				Items:       v.Items,
 			}
 		}
 	}
