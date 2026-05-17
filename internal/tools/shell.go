@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -29,6 +30,7 @@ func (e *ShellExecutor) Execute(ctx context.Context, args map[string]any) (*mode
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	cmd.Env = append(os.Environ(), "GIT_PAGER=cat", "PAGER=cat")
 	output, err := cmd.CombinedOutput()
 
 	result := &model.TaskResult{

@@ -19,6 +19,34 @@ import (
 	"github.com/crabcoder/crabcoder/pkg/model"
 )
 
+var toolColors = []string{
+	"\033[36m", // [1] cyan
+	"\033[33m", // [2] yellow
+	"\033[35m", // [3] magenta
+	"\033[34m", // [4] blue
+	"\033[32m", // [5] green
+	"\033[91m", // [6] bright red
+	"\033[96m", // [7] bright cyan
+	"\033[93m", // [8] bright yellow
+	"\033[95m", // [9] bright magenta
+	"\033[94m", // [10] bright blue
+	"\033[92m", // [11] bright green
+	"\033[31m", // [12] red
+	"\033[37m", // [13] white
+	"\033[90m", // [14] dark gray
+	"\033[97m", // [15] bright white
+	"\033[38;5;208m", // [16] orange (256-color)
+}
+
+func toolColor(i int) string {
+	if i < len(toolColors) {
+		return toolColors[i]
+	}
+	return "\033[37m" // white fallback for overflow
+}
+
+func toolReset() string { return "\033[0m" }
+
 type Request struct {
 	Text      string
 	Mode      string // "ask" or "chat"
@@ -178,12 +206,6 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 			return &Response{Text: resp.Content, TasksExecuted: totalToolCalls, SessionID: requestID}, nil
 		}
 
-		// Show tool calls
-		fmt.Println()
-		for _, tc := range resp.ToolCalls {
-			showToolCall(tc)
-		}
-
 		// Append assistant message (with tool calls) to history
 		assistantMsg := model.Message{
 			Role:      model.RoleAssistant,
@@ -203,10 +225,12 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 		totalToolCalls += len(resp.ToolCalls)
 
 		type toolSlot struct {
-			tc   llm.ToolCall
-			exec tools.ToolExecutor
-			res  *model.TaskResult
-			err  error
+			tc    llm.ToolCall
+			exec  tools.ToolExecutor
+			res   *model.TaskResult
+			err   error
+			color string
+			label string
 		}
 		slots := make([]*toolSlot, 0, len(resp.ToolCalls))
 
@@ -237,7 +261,15 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 					continue
 				}
 			}
+			slot.color = toolColor(len(slots))
+			slot.label = fmt.Sprintf("[%d]", len(slots)+1)
 			slots = append(slots, slot)
+		}
+
+		// Show tool calls with color labels
+		fmt.Println()
+		for _, slot := range slots {
+			showToolCallColored(slot.tc, slot.color, slot.label)
 		}
 
 		var wg sync.WaitGroup
@@ -258,6 +290,8 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 				} else {
 					errMsg = truncateOutput(slot.err.Error(), 2048)
 				}
+				fmt.Printf("%s任务%s (failed)%s\n%s%s%s\n",
+					slot.color, slot.label, toolReset(), slot.color, errMsg, toolReset())
 				history = append(history, model.Message{
 					Role:       model.RoleTool,
 					Content:    errMsg,
@@ -265,6 +299,11 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 					ToolCallID: slot.tc.ID,
 				})
 			} else {
+				if slot.res.Output != "" {
+					fmt.Printf("%s%s%s\n%s%s%s\n",
+						slot.color, slot.label, toolReset(),
+						slot.color, slot.res.Output, toolReset())
+				}
 				history = append(history, model.Message{
 					Role:       model.RoleTool,
 					Content:    truncateOutput(slot.res.Output, 8192),
@@ -419,6 +458,18 @@ func showToolCall(tc llm.ToolCall) {
 		argStr += fmt.Sprintf("%s=%s ", k, s)
 	}
 	fmt.Printf("    → %s(%s)\n", tc.Name, strings.TrimSpace(argStr))
+}
+
+func showToolCallColored(tc llm.ToolCall, color, label string) {
+	argStr := ""
+	for k, v := range tc.Args {
+		s := fmt.Sprintf("%v", v)
+		if len(s) > 40 {
+			s = s[:40] + "..."
+		}
+		argStr += fmt.Sprintf("%s=%s ", k, s)
+	}
+	fmt.Printf("  %s%s %s(%s)%s\n", color, label, tc.Name, strings.TrimSpace(argStr), toolReset())
 }
 
 func truncateOutput(s string, maxLen int) string {
