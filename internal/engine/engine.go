@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	crabcontext "github.com/crabcoder/crabcoder/internal/context"
 	"github.com/crabcoder/crabcoder/internal/event"
 	"github.com/crabcoder/crabcoder/internal/llm"
 	"github.com/crabcoder/crabcoder/internal/scheduler"
@@ -49,6 +50,7 @@ type engineImpl struct {
 	session    *Session
 	parser     *Parser
 	aggregator *Aggregator
+	compressor *crabcontext.Compressor
 	watcher    *watchdog.Watcher
 }
 
@@ -70,6 +72,7 @@ func NewEngine(
 	e.scheduler = scheduler.NewDAGScheduler(poolSize, taskTimeout, tools, bus, sec)
 	e.parser = NewParser(llm)
 	e.aggregator = NewAggregator(llm)
+	e.compressor = crabcontext.NewCompressor(100000)
 	return e
 }
 
@@ -243,6 +246,14 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 					ToolCallID: tc.ID,
 				})
 			}
+		}
+	}
+
+	// Compress history if approaching token budget to keep context bounded.
+	if e.compressor.ShouldCompress(history, 0.7) {
+		compressed, err := e.compressor.Compress(history)
+		if err == nil {
+			history = compressed
 		}
 	}
 

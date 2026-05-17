@@ -251,6 +251,16 @@ func runChat(cmd *cobra.Command, args []string) error {
 			prompt.OptionPrefix("> "),
 			prompt.OptionLivePrefix(func() (string, bool) { return "> ", true }),
 			prompt.OptionTitle("CrabCoder"),
+			prompt.OptionSuggestionTextColor(prompt.White),
+			prompt.OptionSuggestionBGColor(prompt.DefaultColor),
+			prompt.OptionSelectedSuggestionTextColor(prompt.Green),
+			prompt.OptionSelectedSuggestionBGColor(prompt.DefaultColor),
+			prompt.OptionDescriptionTextColor(prompt.White),
+			prompt.OptionDescriptionBGColor(prompt.DefaultColor),
+			prompt.OptionSelectedDescriptionTextColor(prompt.Green),
+			prompt.OptionSelectedDescriptionBGColor(prompt.DefaultColor),
+			prompt.OptionScrollbarBGColor(prompt.DefaultColor),
+			prompt.OptionScrollbarThumbColor(prompt.DarkGray),
 		)
 		p.Run()
 	} else {
