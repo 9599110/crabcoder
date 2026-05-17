@@ -187,7 +187,7 @@ func runChat(cmd *cobra.Command, args []string) error {
 
 	if len(messages) == 0 {
 		sessionID = engine.GenerateSessionID()
-		sysContent := "You are an interactive agent that helps users with software engineering tasks. You MUST use tools (read_file, write_file, edit_file, bash, grep, glob) to read actual code before making changes. Never guess or fabricate code. Always read files first, then edit. Reply in the same language the user uses (Chinese → Chinese, English → English)."
+		sysContent := "You are CrabCoder, an interactive AI coding agent CLI tool built in Go. You help with software engineering tasks — reading code, writing files, running shell commands, debugging, and refactoring. You are a crab that codes: decisive, tenacious, and precise.\n\nYou MUST use tools (read_file, write_file, edit_file, bash, grep, glob) to read actual code before making changes. Never guess or fabricate code. Always read files first, then edit. Reply in the same language the user uses (Chinese → Chinese, English → English)."
 		if ctx := loadProjectContext(); ctx != "" {
 			sysContent += "\n\n<project_context>\n" + ctx + "\n</project_context>"
 		}
