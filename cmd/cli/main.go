@@ -21,6 +21,9 @@ import (
 	"github.com/crabcoder/crabcoder/pkg/config"
 	"github.com/crabcoder/crabcoder/pkg/log"
 	"github.com/crabcoder/crabcoder/pkg/model"
+
+	prompt "github.com/c-bata/go-prompt"
+	"golang.org/x/term"
 )
 
 var (
@@ -194,74 +197,71 @@ func runChat(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	fmt.Printf("CrabCoder coding agent  model=%s  session=%s  (type /exit to quit)\n", cfg.Model.Model, truncateID(sessionID))
-	fmt.Println("  /help for commands")
+	fmt.Printf("CrabCoder coding agent  model=%s  session=%s\n", cfg.Model.Model, truncateID(sessionID))
+	fmt.Println("  /help for commands  ↑↓ select  Tab complete  Enter execute")
 	fmt.Println()
 
-	scanner := bufio.NewScanner(os.Stdin)
-	for {
-		fmt.Print("> ")
-		if !scanner.Scan() {
-			break
-		}
-		input := strings.TrimSpace(scanner.Text())
+	executor := func(input string) {
+		input = strings.TrimSpace(input)
 		if input == "" {
-			continue
+			return
 		}
-		if input == "/exit" || input == "/quit" {
-			break
-		}
-		if input == "/init" {
+		switch input {
+		case "/exit", "/quit":
+			sessionStore.Save(&engine.SessionRecord{
+				ID:        sessionID,
+				CreatedAt: time.Now(),
+				Messages:  messages,
+				Model:     cfg.Model.Model,
+			})
+			fmt.Println("bye.")
+			os.Exit(0)
+		case "/init":
 			fmt.Println(initProject())
-			continue
-		}
-		if input == "/help" {
+		case "/help":
 			showSlashHelp("/")
-			continue
+		default:
+			if strings.HasPrefix(input, "/") {
+				fmt.Printf("  未知命令 %q — 输入 /help 查看可用命令。\n", input)
+				return
+			}
+			messages = append(messages, model.Message{Role: model.RoleUser, Content: input})
+			fmt.Print("  🦀 Thinking...")
+			resp, err := eng.ProcessChat(context.Background(), messages)
+			fmt.Print("\r                    \r")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				return
+			}
+			fmt.Println(resp.Text)
+			messages = append(messages, model.Message{Role: model.RoleAssistant, Content: resp.Text})
+			sessionStore.Save(&engine.SessionRecord{
+				ID:        sessionID,
+				CreatedAt: time.Now(),
+				Messages:  messages,
+				Model:     cfg.Model.Model,
+			})
 		}
-		if len(input) > 0 && input[0] == '/' {
-			prefix := strings.TrimPrefix(input, "/")
-			cmd := interactiveSlash(prefix)
-			if cmd == "" {
-				continue
-			}
-			if cmd == "/exit" || cmd == "/quit" {
-				break
-			}
-			if cmd == "/init" {
-				fmt.Println(initProject())
-				continue
-			}
-			if cmd == "/help" {
-				showSlashHelp("/")
-				continue
-			}
-			continue
-		}
-
-		messages = append(messages, model.Message{Role: model.RoleUser, Content: input})
-		done := make(chan struct{})
-		go showThinking(done)
-		resp, err := eng.ProcessChat(context.Background(), messages)
-		close(done)
-		fmt.Print("\r                    \r")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			continue
-		}
-		fmt.Println(resp.Text)
-		messages = append(messages, model.Message{Role: model.RoleAssistant, Content: resp.Text})
-
-		// Auto-save after each exchange
-		sessionStore.Save(&engine.SessionRecord{
-			ID:        sessionID,
-			CreatedAt: time.Now(),
-			Messages:  messages,
-			Model:     cfg.Model.Model,
-		})
 	}
 
-	// Final save on exit
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		p := prompt.New(
+			executor,
+			slashCompleter,
+			prompt.OptionPrefix("> "),
+			prompt.OptionLivePrefix(func() (string, bool) { return "> ", true }),
+			prompt.OptionTitle("CrabCoder"),
+		)
+		p.Run()
+	} else {
+		// Pipe/redirect: simple line-based input
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			executor(scanner.Text())
+		}
+	}
+
+	// Final save on exit (Ctrl-D)
 	sessionStore.Save(&engine.SessionRecord{
 		ID:        sessionID,
 		CreatedAt: time.Now(),
@@ -354,21 +354,6 @@ func resolveDataDir(raw string) string {
 		}
 	}
 	return raw
-}
-
-func showThinking(done <-chan struct{}) {
-	frames := []string{"🦀 Thinking   ", "🦀 Thinking.  ", "🦀 Thinking.. ", "🦀 Thinking..."}
-	i := 0
-	for {
-		select {
-		case <-done:
-			return
-		default:
-			fmt.Print("\r" + frames[i])
-			i = (i + 1) % len(frames)
-			time.Sleep(300 * time.Millisecond)
-		}
-	}
 }
 
 func truncateID(id string) string {
