@@ -308,16 +308,16 @@ func init() {
 
 func showSlashHelp(input string) {
 	if input == "/help" || input == "/" {
-		fmt.Fprintf(os.Stderr, "\n❯ /\n")
-		fmt.Fprintln(os.Stderr, strings.Repeat("─", 80))
+		fmt.Fprintf(os.Stdout, "\n❯ /\n")
+		fmt.Fprintln(os.Stdout, strings.Repeat("─", 80))
 		for _, c := range slashCommands {
 			tag := ""
 			if c.tag != "" {
 				tag = " (" + c.tag + ")"
 			}
-			fmt.Fprintf(os.Stderr, "  \033[1m%-30s\033[0m %s%s\n", c.cmd, c.desc, tag)
+			fmt.Fprintf(os.Stdout, "  \033[1m%-30s\033[0m %s%s\n", c.cmd, c.desc, tag)
 		}
-		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stdout)
 		return
 	}
 	var matches []struct {
@@ -331,18 +331,18 @@ func showSlashHelp(input string) {
 		}
 	}
 	if len(matches) > 0 {
-		fmt.Fprintf(os.Stderr, "\n❯ %s\n", input)
-		fmt.Fprintln(os.Stderr, strings.Repeat("─", 80))
+		fmt.Fprintf(os.Stdout, "\n❯ %s\n", input)
+		fmt.Fprintln(os.Stdout, strings.Repeat("─", 80))
 		for _, m := range matches {
 			tag := ""
 			if m.tag != "" {
 				tag = " (" + m.tag + ")"
 			}
-			fmt.Fprintf(os.Stderr, "  \033[1m%-30s\033[0m %s%s\n", m.cmd, m.desc, tag)
+			fmt.Fprintf(os.Stdout, "  \033[1m%-30s\033[0m %s%s\n", m.cmd, m.desc, tag)
 		}
-		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stdout)
 	} else {
-		fmt.Fprintf(os.Stderr, "\n  未知命令 %q — 输入 /help 查看可用命令。\n", input)
+		fmt.Fprintf(os.Stdout, "\n  未知命令 %q — 输入 /help 查看可用命令。\n", input)
 	}
 }
 
