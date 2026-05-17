@@ -2,8 +2,10 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	crabcontext "github.com/crabcoder/crabcoder/internal/context"
@@ -158,21 +160,26 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 	totalToolCalls := 0
 
 	for round := 0; round < maxRounds; round++ {
-		resp, err := e.llm.Chat(ctx, history, &llm.ChatOptions{Tools: compactDefs})
+		stream, err := e.llm.StreamChat(ctx, history, &llm.ChatOptions{Tools: compactDefs})
 		if err != nil {
 			e.session.Transition(SessionError)
-			return nil, fmt.Errorf("chat: LLM call: %w", err)
+			return nil, fmt.Errorf("chat: LLM stream: %w", err)
+		}
+
+		resp := consumeStream(stream)
+		if resp == nil {
+			e.session.Transition(SessionError)
+			return nil, fmt.Errorf("chat: empty stream response")
 		}
 
 		// No tool calls — LLM is done, return response
 		if len(resp.ToolCalls) == 0 {
 			e.session.Transition(SessionCompleted)
-			showLLMResponse(resp, "")
 			return &Response{Text: resp.Content, TasksExecuted: totalToolCalls, SessionID: requestID}, nil
 		}
 
-		// Show response and tool calls
-		showLLMResponse(resp, "Tool calls:")
+		// Show tool calls
+		fmt.Println()
 		for _, tc := range resp.ToolCalls {
 			showToolCall(tc)
 		}
@@ -192,11 +199,21 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 		}
 		history = append(history, assistantMsg)
 
-		// Execute tool calls and collect results
+		// Execute tool calls: security check first, then parallel execution.
 		totalToolCalls += len(resp.ToolCalls)
+
+		type toolSlot struct {
+			tc   llm.ToolCall
+			exec tools.ToolExecutor
+			res  *model.TaskResult
+			err  error
+		}
+		slots := make([]*toolSlot, 0, len(resp.ToolCalls))
+
 		for _, tc := range resp.ToolCalls {
-			exec := e.tools.Get(tc.Name)
-			if exec == nil {
+			slot := &toolSlot{tc: tc}
+			slot.exec = e.tools.Get(tc.Name)
+			if slot.exec == nil {
 				history = append(history, model.Message{
 					Role:       model.RoleTool,
 					Content:    fmt.Sprintf("tool %q not found", tc.Name),
@@ -206,54 +223,63 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 				continue
 			}
 
-			decision := e.security.Decide(exec, tc.Args)
+			decision := e.security.Decide(slot.exec, tc.Args)
 			if !decision.Approved {
-				if decision.NeedsUserApproval {
-					userApproved := promptUserApproval(tc.Name, tc.Args, decision)
-					if userApproved {
-						goto executeTool
-					}
+				if decision.NeedsUserApproval && promptUserApproval(tc.Name, tc.Args, decision) {
+					// User approved — will execute
+				} else {
+					history = append(history, model.Message{
+						Role:       model.RoleTool,
+						Content:    fmt.Sprintf("blocked: %s (risk: %s)", decision.Message, decision.Risk),
+						Name:       tc.Name,
+						ToolCallID: tc.ID,
+					})
+					continue
 				}
-				history = append(history, model.Message{
-					Role:       model.RoleTool,
-					Content:    fmt.Sprintf("blocked: %s (risk: %s)", decision.Message, decision.Risk),
-					Name:       tc.Name,
-					ToolCallID: tc.ID,
-				})
-				continue
 			}
-		executeTool:
+			slots = append(slots, slot)
+		}
 
-			result, err := exec.Execute(ctx, tc.Args)
-			if err != nil || !result.Success {
+		var wg sync.WaitGroup
+		for _, slot := range slots {
+			wg.Add(1)
+			go func(s *toolSlot) {
+				defer wg.Done()
+				s.res, s.err = s.exec.Execute(ctx, s.tc.Args)
+			}(slot)
+		}
+		wg.Wait()
+
+		for _, slot := range slots {
+			if slot.err != nil || (slot.res != nil && !slot.res.Success) {
 				errMsg := "failed"
-				if result != nil {
-					errMsg = truncateOutput(result.Error, 2048)
-				} else if err != nil {
-					errMsg = truncateOutput(err.Error(), 2048)
+				if slot.res != nil {
+					errMsg = truncateOutput(slot.res.Error, 2048)
+				} else {
+					errMsg = truncateOutput(slot.err.Error(), 2048)
 				}
 				history = append(history, model.Message{
 					Role:       model.RoleTool,
 					Content:    errMsg,
-					Name:       tc.Name,
-					ToolCallID: tc.ID,
+					Name:       slot.tc.Name,
+					ToolCallID: slot.tc.ID,
 				})
 			} else {
 				history = append(history, model.Message{
 					Role:       model.RoleTool,
-					Content:    truncateOutput(result.Output, 8192),
-					Name:       tc.Name,
-					ToolCallID: tc.ID,
+					Content:    truncateOutput(slot.res.Output, 8192),
+					Name:       slot.tc.Name,
+					ToolCallID: slot.tc.ID,
 				})
 			}
 		}
-	}
 
-	// Compress history if approaching token budget to keep context bounded.
-	if e.compressor.ShouldCompress(history, 0.7) {
-		compressed, err := e.compressor.Compress(history)
-		if err == nil {
-			history = compressed
+		// Compress history if approaching token budget to keep context bounded.
+		if e.compressor.ShouldCompress(history, 0.7) {
+			compressed, err := e.compressor.Compress(history)
+			if err == nil {
+				history = compressed
+			}
 		}
 	}
 
@@ -267,6 +293,79 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 
 func (e *engineImpl) ListTools() []model.ToolDefinition {
 	return e.tools.Definitions()
+}
+
+// consumeStream reads streamed chunks, displays content in real-time, and builds the full ChatResponse.
+func consumeStream(stream <-chan llm.ChatChunk) *llm.ChatResponse {
+	resp := &llm.ChatResponse{}
+	var tcArgsBuf strings.Builder
+	var currentTC *struct {
+		id   string
+		name string
+	}
+
+	first := true
+	for {
+		chunk, ok := <-stream
+		if !ok || chunk.Done {
+			break
+		}
+
+		// Start of new tool call (OpenAI-style: chunk carries ID + Name)
+		if chunk.ToolCallID != "" {
+			if currentTC != nil && tcArgsBuf.Len() > 0 {
+				resp.ToolCalls = append(resp.ToolCalls, parseToolCall(currentTC.id, currentTC.name, tcArgsBuf.String()))
+			}
+			currentTC = &struct {
+				id   string
+				name string
+			}{id: chunk.ToolCallID, name: chunk.ToolCallName}
+			tcArgsBuf.Reset()
+		}
+
+		// Tool call args fragment (may be Anthropic-style without prior ID/Name chunk)
+		if chunk.ToolCallArgs != "" {
+			if currentTC == nil {
+				currentTC = &struct {
+					id   string
+					name string
+				}{id: fmt.Sprintf("tc-%d", len(resp.ToolCalls)+1)}
+			}
+			tcArgsBuf.WriteString(chunk.ToolCallArgs)
+			continue
+		}
+
+		// Text content — display as it arrives
+		if chunk.Content != "" {
+			if first {
+				fmt.Print("\r                    \r")
+				first = false
+			}
+			fmt.Print(chunk.Content)
+			resp.Content += chunk.Content
+		}
+	}
+
+	// Finalize any pending tool call
+	if currentTC != nil && tcArgsBuf.Len() > 0 {
+		resp.ToolCalls = append(resp.ToolCalls, parseToolCall(currentTC.id, currentTC.name, tcArgsBuf.String()))
+	}
+
+	if !first {
+		fmt.Println()
+	}
+	return resp
+}
+
+func parseToolCall(id, name, rawArgs string) llm.ToolCall {
+	args := make(map[string]any)
+	if err := json.Unmarshal([]byte(rawArgs), &args); err != nil {
+		args["_raw"] = rawArgs
+	}
+	if name == "" && id != "" {
+		name = id
+	}
+	return llm.ToolCall{ID: id, Name: name, Args: args}
 }
 
 func (e *engineImpl) CancelRequest(ctx context.Context, requestID string) error {

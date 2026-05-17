@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/crabcoder/crabcoder/internal/llm"
 	"github.com/crabcoder/crabcoder/pkg/model"
@@ -19,8 +20,27 @@ func (m *mockLLM) Chat(ctx context.Context, messages []model.Message, opts *llm.
 }
 
 func (m *mockLLM) StreamChat(ctx context.Context, messages []model.Message, opts *llm.ChatOptions) (<-chan llm.ChatChunk, error) {
-	ch := make(chan llm.ChatChunk)
-	close(ch)
+	resp, err := m.Chat(ctx, messages, opts)
+	if err != nil {
+		return nil, err
+	}
+	ch := make(chan llm.ChatChunk, 8)
+	go func() {
+		defer close(ch)
+		if resp.Content != "" {
+			ch <- llm.ChatChunk{Content: resp.Content}
+		}
+		for _, tc := range resp.ToolCalls {
+			// Send tool call args as a complete JSON block (mimics streaming accumulation)
+			rawArgs, _ := json.Marshal(tc.Args)
+			ch <- llm.ChatChunk{
+				ToolCallID:   tc.ID,
+				ToolCallName: tc.Name,
+				ToolCallArgs: string(rawArgs),
+			}
+		}
+		ch <- llm.ChatChunk{Done: true}
+	}()
 	return ch, nil
 }
 

@@ -226,14 +226,11 @@ func runChat(cmd *cobra.Command, args []string) error {
 				return
 			}
 			messages = append(messages, model.Message{Role: model.RoleUser, Content: input})
-			fmt.Print("  🦀 Thinking...")
 			resp, err := eng.ProcessChat(context.Background(), messages)
-			fmt.Print("\r                    \r")
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				return
 			}
-			fmt.Println(resp.Text)
 			messages = append(messages, model.Message{Role: model.RoleAssistant, Content: resp.Text})
 			sessionStore.Save(&engine.SessionRecord{
 				ID:        sessionID,
