@@ -20,7 +20,7 @@ func TestProcessRequest_NoTasks(t *testing.T) {
 
 	policy := security.NewPolicy(security.ModeStrict)
 	decider := security.NewDecider(policy)
-	eng := NewEngine(mock, tools.NewToolRegistry(), decider, event.NewBus(), 2, 30)
+	eng := NewEngine(mock, tools.NewToolRegistry(), decider, event.NewBus(), 2, 30, nil)
 	_, err := eng.ProcessRequest(context.Background(), &Request{Text: "do something", Mode: "ask"})
 	if err == nil {
 		t.Fatal("expected error for no tasks")
@@ -47,7 +47,7 @@ func TestProcessRequest_SingleTask(t *testing.T) {
 
 	policy := security.NewPolicy(security.ModeAutoAll)
 	decider := security.NewDecider(policy)
-	eng := NewEngine(mock, reg, decider, bus, 2, 30)
+	eng := NewEngine(mock, reg, decider, bus, 2, 30, nil)
 	resp, err := eng.ProcessRequest(context.Background(), &Request{Text: "read test.go", Mode: "ask"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -66,7 +66,7 @@ func TestProcessChat_NoToolCalls(t *testing.T) {
 
 	policy := security.NewPolicy(security.ModeStrict)
 	decider := security.NewDecider(policy)
-	eng := NewEngine(mock, tools.NewToolRegistry(), decider, event.NewBus(), 2, 30)
+	eng := NewEngine(mock, tools.NewToolRegistry(), decider, event.NewBus(), 2, 30, nil)
 	resp, err := eng.ProcessChat(context.Background(), []model.Message{
 		{Role: model.RoleUser, Content: "hello"},
 	})
@@ -100,7 +100,7 @@ func TestProcessChat_SecurityBlocksTool(t *testing.T) {
 
 	policy := security.NewPolicy(security.ModeStrict)
 	decider := security.NewDecider(policy)
-	eng := NewEngine(mock, reg, decider, event.NewBus(), 2, 30)
+	eng := NewEngine(mock, reg, decider, event.NewBus(), 2, 30, nil)
 	resp, err := eng.ProcessChat(context.Background(), []model.Message{
 		{Role: model.RoleUser, Content: "read /etc/passwd"},
 	})
@@ -135,7 +135,7 @@ func TestProcessChat_ToolLoop(t *testing.T) {
 
 	policy := security.NewPolicy(security.ModeAutoAll)
 	decider := security.NewDecider(policy)
-	eng := NewEngine(mock, reg, decider, bus, 2, 30)
+	eng := NewEngine(mock, reg, decider, bus, 2, 30, nil)
 	resp, err := eng.ProcessChat(context.Background(), []model.Message{
 		{Role: model.RoleUser, Content: "what's in README.md?"},
 	})

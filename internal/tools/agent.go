@@ -75,7 +75,7 @@ func (e *AgentExecutor) Validate(args map[string]any) error {
 func (e *AgentExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "agent",
-		Description: "Launch a new agent to handle complex, multi-step tasks autonomously. Available subagent types: general-purpose (all tools), explore (read-only search), plan (planning/design).",
+		Description: "Launch a subagent for complex multi-step tasks. Types: general-purpose, explore, plan.",
 		Parameters: model.ParameterSchema{
 			Type: "object",
 			Properties: map[string]model.ParameterProperty{

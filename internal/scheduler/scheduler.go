@@ -31,9 +31,10 @@ type DAGScheduler struct {
 	status      DAGSchedulerStatus
 	decider     *security.Decider
 	watcher     *watchdog.Watcher
+	sandbox     *security.Sandbox
 }
 
-func NewDAGScheduler(poolSize int, taskTimeout time.Duration, toolReg *tools.ToolRegistry, bus *event.Bus, decider *security.Decider) *DAGScheduler {
+func NewDAGScheduler(poolSize int, taskTimeout time.Duration, toolReg *tools.ToolRegistry, bus *event.Bus, decider *security.Decider, sandbox *security.Sandbox) *DAGScheduler {
 	return &DAGScheduler{
 		dag:         NewDAG(),
 		poolSize:    poolSize,
@@ -42,6 +43,7 @@ func NewDAGScheduler(poolSize int, taskTimeout time.Duration, toolReg *tools.Too
 		events:      bus,
 		status:      DAGSchedulerIdle,
 		decider:     decider,
+		sandbox:     sandbox,
 	}
 }
 
@@ -114,6 +116,18 @@ func (s *DAGScheduler) Execute(ctx context.Context) (map[string]*model.TaskResul
 			}
 		}
 		// --- End security gate ---
+
+		// --- Sandbox path validation ---
+		if s.sandbox != nil {
+			if path, ok := task.ToolArgs["path"].(string); ok && path != "" {
+				if _, err := s.sandbox.ValidatePath(path); err != nil {
+					task.Status = model.TaskFailed
+					task.Error = err
+					return &model.TaskResult{Success: false, Error: err.Error()}
+				}
+			}
+		}
+		// --- End sandbox path validation ---
 
 		executor := s.toolReg.Get(task.Tool)
 		if executor == nil {

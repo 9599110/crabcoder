@@ -3,80 +3,81 @@ package tools
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/crabcoder/crabcoder/pkg/model"
 )
-
-var extToLanguage = map[string]string{
-	".rs":   "rust",
-	".ts":   "typescript",
-	".tsx":  "typescript",
-	".js":   "javascript",
-	".jsx":  "javascript",
-	".py":   "python",
-	".go":   "go",
-	".java": "java",
-	".c":    "c",
-	".h":    "c",
-	".cpp":  "cpp",
-	".hpp":  "cpp",
-	".rb":   "ruby",
-	".lua":  "lua",
-	".zig":  "zig",
-}
-
-type lspState struct {
-	mu          sync.RWMutex
-	diagnostics map[string]string // file -> cached diagnostics
-}
-
-var lspGlobalState = &lspState{diagnostics: make(map[string]string)}
 
 type LSPExecutor struct{}
 
 func (e *LSPExecutor) Execute(ctx context.Context, args map[string]any) (*model.TaskResult, error) {
 	action, _ := args["action"].(string)
-	path, _ := args["path"].(string)
+	filePath, _ := args["filePath"].(string)
 	line, _ := args["line"].(float64)
 	character, _ := args["character"].(float64)
 	query, _ := args["query"].(string)
 
-	language := detectLanguage(path)
+	lang := detectLanguage(filePath)
+	if lang == "" {
+		return &model.TaskResult{Success: false, Error: "Cannot detect language for: " + filePath}, nil
+	}
+
+	srv, err := getOrStartLSPServer(ctx, lang, filePath)
+	if err != nil {
+		return &model.TaskResult{Success: false, Error: err.Error()}, nil
+	}
+
+	uri := "file://" + filePath
 
 	switch action {
 	case "diagnostics":
-		lspGlobalState.mu.RLock()
-		diag, ok := lspGlobalState.diagnostics[path]
-		lspGlobalState.mu.RUnlock()
+		srv.diagsMu.RLock()
+		diag, ok := srv.diags[uri]
+		srv.diagsMu.RUnlock()
 		if !ok {
-			return &model.TaskResult{Success: true, Output: "No diagnostics cached for " + path}, nil
+			return &model.TaskResult{Success: true, Output: "No diagnostics for " + filePath}, nil
 		}
-		return &model.TaskResult{Success: true, Output: diag}, nil
+		return &model.TaskResult{Success: true, Output: strings.TrimSpace(diag)}, nil
 
-	case "definition", "references", "hover", "symbols":
-		if language == "" {
-			return &model.TaskResult{Success: false, Error: "Cannot detect language for file: " + path}, nil
+	case "definition":
+		result, err := srv.definition(ctx, uri, int(line), int(character))
+		if err != nil {
+			return &model.TaskResult{Success: false, Error: err.Error()}, nil
 		}
-		return &model.TaskResult{
-			Success: true,
-			Output:  fmt.Sprintf("LSP %s dispatched to %s server (path=%s, line=%d, char=%d, query=%s). Full LSP support is a stub.", action, language, path, int(line), int(character), query),
-		}, nil
+		return &model.TaskResult{Success: true, Output: result}, nil
+
+	case "references":
+		result, err := srv.references(ctx, uri, int(line), int(character))
+		if err != nil {
+			return &model.TaskResult{Success: false, Error: err.Error()}, nil
+		}
+		return &model.TaskResult{Success: true, Output: result}, nil
+
+	case "hover":
+		result, err := srv.hover(ctx, uri, int(line), int(character))
+		if err != nil {
+			return &model.TaskResult{Success: false, Error: err.Error()}, nil
+		}
+		return &model.TaskResult{Success: true, Output: result}, nil
 
 	case "documentSymbol":
-		return &model.TaskResult{Success: true, Output: "LSP documentSymbol dispatched."}, nil
+		result, err := srv.documentSymbols(ctx, uri)
+		if err != nil {
+			return &model.TaskResult{Success: false, Error: err.Error()}, nil
+		}
+		return &model.TaskResult{Success: true, Output: result}, nil
+
+	case "symbols":
+		result, err := srv.workspaceSymbols(ctx, query)
+		if err != nil {
+			return &model.TaskResult{Success: false, Error: err.Error()}, nil
+		}
+		return &model.TaskResult{Success: true, Output: result}, nil
 
 	default:
 		valid := []string{"diagnostics", "definition", "references", "hover", "symbols", "documentSymbol"}
 		return &model.TaskResult{Success: false, Error: "unknown action: " + action + ". Valid: " + strings.Join(valid, ", ")}, nil
 	}
-}
-
-func detectLanguage(path string) string {
-	ext := strings.ToLower(filepath.Ext(path))
-	return extToLanguage[ext]
 }
 
 func (e *LSPExecutor) Validate(args map[string]any) error {
@@ -89,17 +90,17 @@ func (e *LSPExecutor) Validate(args map[string]any) error {
 func (e *LSPExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "lsp",
-		Description: "Interact with Language Server Protocol (LSP) servers for code intelligence (definition, references, hover, diagnostics, symbols).",
+		Description: "Query LSP servers for code intelligence: go-to-definition, find references, hover documentation, diagnostics, document symbols.",
 		Parameters: model.ParameterSchema{
 			Type: "object",
 			Properties: map[string]model.ParameterProperty{
 				"action":    {Type: "string", Description: "LSP operation: diagnostics, definition, references, hover, symbols, documentSymbol."},
-				"path":      {Type: "string", Description: "The file path to operate on."},
+				"filePath":  {Type: "string", Description: "The file path to operate on."},
 				"line":      {Type: "integer", Description: "The line number (1-based)."},
 				"character": {Type: "integer", Description: "The character offset (1-based)."},
-				"query":     {Type: "string", Description: "Search query for workspaceSymbol."},
+				"query":     {Type: "string", Description: "Search query for workspace symbols."},
 			},
-			Required: []string{"action"},
+			Required: []string{"action", "filePath"},
 		},
 	}
 }

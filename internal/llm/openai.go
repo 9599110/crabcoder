@@ -239,16 +239,12 @@ func (p *OpenAIProvider) buildRequest(messages []model.Message, opts *ChatOption
 		openAITools = append(openAITools, ot)
 	}
 
-	req := openAIRequest{
+	return openAIRequest{
 		Model:    p.model,
 		Messages: openAIMsgs,
 		Tools:    openAITools,
 		Stream:   stream,
 	}
-	if len(openAITools) > 0 {
-		req.ToolChoice = "auto"
-	}
-	return req
 }
 
 func (p *OpenAIProvider) toResponse(or openAIResponse) *ChatResponse {

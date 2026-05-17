@@ -129,7 +129,10 @@ crabcoder/
 │   │   ├── memory.go            #   Memory 接口 + MemoryManager（stub Store/Recall）
 │   │   ├── vector.go            #   VectorStore 接口 + SearchResult
 │   │   └── kg.go                #   KnowledgeGraph（内存图谱，AddNode/AddEdge 已实现）
-│   ├── watchdog/                # 卡死检测 [v0.2.0]
+│   ├── watchdog/                # 卡死检测（watchdog + heartbeat + timeout）
+│   ├── hooks/                   # Hook 系统（PreTool/PostTool/Session hook）
+│   ├── code/                    # 代码智能（多语言解析 + 符号提取 + 重命名）
+│   ├── mcp/                     # MCP 协议（Server 连接管理 + Tool 桥接）
 │   └── rpc/                     # IDE 集成协议（JSON-RPC over stdio）
 │       ├── protocol.go          #   Request/Response/Notification 类型定义
 │       ├── server.go            #   服务端：注册 handler + 读写循环
@@ -734,21 +737,35 @@ RiskCritical // rm -rf、sudo、无限制 shell（默认拦截）
 | # | 文件/包 | 状态 | 说明 |
 |---|---------|------|------|
 | 10.1 | `internal/context/` | ✅ | 消息管理 + 压缩管道（L0-L3 分级 + 摘要压缩） |
-| 10.2 | `internal/memory/` | 🔄 | 知识图谱可用；VectorStore 接口待实现 |
+| 10.2 | `internal/memory/` | ✅ | 知识图谱 + InMemoryVectorStore + RAG 检索 |
 | 10.3 | `internal/rpc/` | ✅ | JSON-RPC 2.0 协议完整实现 |
 
-### Future (v0.2.0+)
+### v0.2.0 新增功能
 
 | # | 任务 | 状态 | 说明 |
 |---|------|------|------|
-| F.1 | `internal/watchdog/` | ⬜ | 卡死检测与干预 |
-| F.2 | 上下文压缩管道 | ✅ | L0-L3 分级 + 摘要压缩（v0.1.0 已完成） |
-| F.3 | 向量存储实现 | ⬜ | ChromaDB 或内置 SQLite 向量 |
-| F.4 | 权限规则系统 | ⬜ | Glob 模式 + Allow/Deny/Ask 规则 |
-| F.5 | Provider fallback | ⬜ | 主模型失败时自动切换备选 |
-| F.6 | 会话持久化 | ⬜ | 磁盘存储 + 轮转 + 恢复 |
-| F.7 | MCP 协议集成 | ⬜ | JSON-RPC MCP Server 连接管理 |
-| F.8 | VS Code 插件 | ⬜ | CLI 子进程 + stdio 消息 |
+| F.1 | `internal/watchdog/` | ✅ | 卡死检测：watchdog.go + heartbeat.go + timeout.go（LLM 流空闲、工具输出空闲、DAG 全局超时、级联阻塞） |
+| F.2 | 上下文压缩管道 | ✅ | L0-L3 分级 + 摘要压缩 |
+| F.3 | 向量存储实现 | ✅ | InMemoryVectorStore（余弦相似度搜索 + trigram embedding） |
+| F.4 | 权限规则系统 | ✅ | RuleEngine + Allow/Deny/Ask 规则 + glob 模式匹配 |
+| F.5 | Provider fallback | ✅ | FallbackProvider + 瞬态错误检测 + 自动切换 |
+| F.6 | 会话持久化 | ✅ | SessionStore: 文件存储 + 原子写入 + 轮转（256KB 上限） |
+| F.7 | MCP 协议集成 | ✅ | MCP Client/Server + 配置自动启动 + 生命周期管理 |
+| F.8 | 沙箱路径验证 | ✅ | DAGScheduler + ProcessChat 双重路径验证 |
+| F.9 | `internal/hooks/` | ✅ | PreTool/PostTool/SessionStart/SessionEnd hooks |
+| F.10 | LSP 集成 | ✅ | gopls 客户端: definition/references/hover/diagnostics/symbols |
+| F.11 | RAG 检索 | ✅ | 压缩消息索引 + trigram/L embedding + 上下文注入 |
+| F.12 | `internal/code/` | ✅ | 多语言代码解析（Go AST + regex fallback） |
+| F.13 | AST 感知编辑 | ✅ | parse_symbols / rename_symbol / find_references / format_code 工具 |
+| F.14 | LLM Embedding API | ✅ | EmbeddingClient（OpenAI 兼容 API），自动回退 trigram |
+
+### v0.3.0+ (待实现)
+
+| # | 任务 | 状态 | 说明 |
+|---|------|------|------|
+| F.15 | VS Code 插件 | ⬜ | CLI 子进程 + stdio 消息 |
+| F.16 | JetBrains 插件 | ⬜ | IntelliJ 平台插件 |
+| F.17 | Tree-sitter 原生绑定 | ⬜ | CGO tree-sitter 替代 regex fallback |
 
 ---
 

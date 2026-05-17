@@ -85,7 +85,7 @@ func (e *WebFetchExecutor) Validate(args map[string]any) error {
 func (e *WebFetchExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "web_fetch",
-		Description: "Fetches content from a URL and processes into markdown.",
+		Description: "Fetch content from a URL and convert HTML to markdown.",
 		Parameters: model.ParameterSchema{
 			Type: "object",
 			Properties: map[string]model.ParameterProperty{
@@ -180,7 +180,7 @@ func (e *WebSearchExecutor) Validate(args map[string]any) error {
 func (e *WebSearchExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "web_search",
-		Description: "Search the web and return results.",
+		Description: "Search the web.",
 		Parameters: model.ParameterSchema{
 			Type: "object",
 			Properties: map[string]model.ParameterProperty{

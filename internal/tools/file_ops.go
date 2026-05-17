@@ -176,7 +176,7 @@ func (e *EditFileExecutor) Validate(args map[string]any) error {
 func (e *EditFileExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "edit_file",
-		Description: "Performs exact string replacements in an existing file.",
+		Description: "Exact string replacements in a file.",
 		Parameters: model.ParameterSchema{
 			Type: "object",
 			Properties: map[string]model.ParameterProperty{

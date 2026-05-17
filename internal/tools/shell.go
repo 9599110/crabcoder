@@ -58,7 +58,7 @@ func (e *ShellExecutor) Validate(args map[string]any) error {
 func (e *ShellExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "bash",
-		Description: "Execute a shell command in the current workspace.",
+		Description: "Execute a shell command.",
 		Parameters: model.ParameterSchema{
 			Type: "object",
 			Properties: map[string]model.ParameterProperty{
@@ -71,4 +71,4 @@ func (e *ShellExecutor) GetDefinition() model.ToolDefinition {
 	}
 }
 
-func (e *ShellExecutor) GetRiskLevel() RiskLevel { return RiskCritical }
+func (e *ShellExecutor) GetRiskLevel() RiskLevel { return RiskHigh }

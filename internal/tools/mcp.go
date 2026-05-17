@@ -96,7 +96,7 @@ func (e *ListMcpResourcesExecutor) Validate(args map[string]any) error { return 
 func (e *ListMcpResourcesExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "list_mcp_resources",
-		Description: "List connected MCP servers and their resources/tools.",
+		Description: "List connected MCP servers and their tools.",
 		Parameters: model.ParameterSchema{
 			Type:       "object",
 			Properties: map[string]model.ParameterProperty{},
@@ -136,7 +136,7 @@ func (e *McpAuthExecutor) Validate(args map[string]any) error {
 func (e *McpAuthExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "mcp_auth",
-		Description: "Get the connection status of an MCP server.",
+		Description: "Check MCP server connection status.",
 		Parameters: model.ParameterSchema{
 			Type: "object",
 			Properties: map[string]model.ParameterProperty{

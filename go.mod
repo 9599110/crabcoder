@@ -2,6 +2,8 @@ module github.com/crabcoder/crabcoder
 
 go 1.25.0
 
+replace github.com/c-bata/go-prompt => ./_patch/go-prompt
+
 require (
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/spf13/cobra v1.10.2

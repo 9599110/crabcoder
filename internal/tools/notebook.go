@@ -140,7 +140,7 @@ func (e *NotebookEditExecutor) Validate(args map[string]any) error {
 func (e *NotebookEditExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "notebook_edit",
-		Description: "Edit a Jupyter notebook (.ipynb file) by replacing, inserting, or deleting cells.",
+		Description: "Edit a Jupyter notebook cell: replace, insert, or delete.",
 		Parameters: model.ParameterSchema{
 			Type: "object",
 			Properties: map[string]model.ParameterProperty{

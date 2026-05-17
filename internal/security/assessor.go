@@ -7,7 +7,7 @@ import (
 )
 
 type Assessor struct {
-	policy     *Policy
+	policy      *Policy
 	blockedCmds []string
 }
 
@@ -22,10 +22,29 @@ var defaultBlocked = []string{
 	"curl | bash",
 }
 
+// readOnlyPrefixes are command prefixes that don't modify filesystem state.
+// These are de-escalated to RiskMedium so they auto-approve in auto-low mode.
+var readOnlyPrefixes = []string{
+	"ls", "cat", "head", "tail", "wc",
+	"grep ", "egrep ", "rg ",
+	"find ", "locate ",
+	"echo ", "printf ",
+	"pwd", "whoami", "uname", "date", "env",
+	"which ", "type ", "command ",
+	"git status", "git log", "git diff", "git show", "git branch",
+	"git rev-parse", "git config", "git remote", "git stash list",
+	"git blame", "git grep",
+	"go version", "go env", "go doc", "go vet",
+	"ps", "top",
+	"file ", "stat ", "readlink ",
+	"du ", "df ", "df -",
+	"gh pr view", "gh issue view", "gh api",
+}
+
 func NewAssessor(policy *Policy) *Assessor {
 	return &Assessor{
-		policy:      policy,
-		blockedCmds: defaultBlocked,
+		policy:       policy,
+		blockedCmds:  defaultBlocked,
 	}
 }
 
@@ -49,6 +68,10 @@ func (a *Assessor) Assess(executor tools.ToolExecutor, args map[string]any) tool
 		if strings.Contains(cmd, "curl") && strings.Contains(cmd, "|") {
 			return tools.RiskHigh
 		}
+		// De-escalate read-only commands to RiskMedium
+		if baseRisk >= tools.RiskHigh && isReadOnly(cmd) {
+			return tools.RiskMedium
+		}
 	}
 
 	// Write operations outside workspace could increase risk
@@ -65,6 +88,15 @@ func (a *Assessor) Assess(executor tools.ToolExecutor, args map[string]any) tool
 func (a *Assessor) isBlocked(cmd string) bool {
 	for _, blocked := range a.blockedCmds {
 		if strings.Contains(cmd, blocked) {
+			return true
+		}
+	}
+	return false
+}
+
+func isReadOnly(cmd string) bool {
+	for _, prefix := range readOnlyPrefixes {
+		if strings.HasPrefix(cmd, prefix) {
 			return true
 		}
 	}

@@ -39,7 +39,7 @@ func (e *EnterPlanModeExecutor) Validate(args map[string]any) error { return nil
 func (e *EnterPlanModeExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "enter_plan_mode",
-		Description: "Enter plan mode. In plan mode, the agent will design an approach before implementation.",
+		Description: "Enter plan mode to design an approach before implementing.",
 		Parameters: model.ParameterSchema{
 			Type:       "object",
 			Properties: map[string]model.ParameterProperty{},
@@ -64,7 +64,7 @@ func (e *ExitPlanModeExecutor) Validate(args map[string]any) error { return nil 
 func (e *ExitPlanModeExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "exit_plan_mode",
-		Description: "Exit plan mode and return to normal implementation mode.",
+		Description: "Exit plan mode.",
 		Parameters: model.ParameterSchema{
 			Type:       "object",
 			Properties: map[string]model.ParameterProperty{},

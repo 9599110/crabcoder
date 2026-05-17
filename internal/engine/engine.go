@@ -2,15 +2,16 @@ package engine
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strings"
+	"os"
 	"sync"
 	"time"
 
 	crabcontext "github.com/crabcoder/crabcoder/internal/context"
 	"github.com/crabcoder/crabcoder/internal/event"
+	"github.com/crabcoder/crabcoder/internal/hooks"
 	"github.com/crabcoder/crabcoder/internal/llm"
+	"github.com/crabcoder/crabcoder/internal/memory"
 	"github.com/crabcoder/crabcoder/internal/scheduler"
 	"github.com/crabcoder/crabcoder/internal/security"
 	"github.com/crabcoder/crabcoder/internal/tools"
@@ -69,6 +70,12 @@ type Engine interface {
 	Health() error
 	// EnableWatchdog creates and starts the watchdog monitor for stall detection.
 	EnableWatchdog(cfg *config.TimeoutConfig) context.CancelFunc
+	// SetHooks configures pre/post tool hooks.
+	SetHooks(m *hooks.Manager)
+	// SetMemory configures the memory manager for RAG retrieval.
+	SetMemory(mem *memory.MemoryManager)
+	// SetLLM replaces the LLM provider for mid-session model switching.
+	SetLLM(llm llm.LLMProvider)
 }
 
 type engineImpl struct {
@@ -82,6 +89,27 @@ type engineImpl struct {
 	aggregator *Aggregator
 	compressor *crabcontext.Compressor
 	watcher    *watchdog.Watcher
+	sandbox    *security.Sandbox
+	hooks      *hooks.Manager
+	memory     *memory.MemoryManager
+}
+
+func (e *engineImpl) SetSandbox(s *security.Sandbox) {
+	e.sandbox = s
+}
+
+func (e *engineImpl) SetHooks(m *hooks.Manager) {
+	e.hooks = m
+}
+
+func (e *engineImpl) SetMemory(mem *memory.MemoryManager) {
+	e.memory = mem
+}
+
+func (e *engineImpl) SetLLM(llm llm.LLMProvider) {
+	e.llm = llm
+	e.parser = NewParser(llm)
+	e.aggregator = NewAggregator(llm)
 }
 
 func NewEngine(
@@ -91,6 +119,7 @@ func NewEngine(
 	bus *event.Bus,
 	poolSize int,
 	taskTimeout time.Duration,
+	sandbox *security.Sandbox,
 ) Engine {
 	e := &engineImpl{
 		llm:      llm,
@@ -98,8 +127,9 @@ func NewEngine(
 		security: sec,
 		events:   bus,
 		session:  NewSession(bus),
+		sandbox:  sandbox,
 	}
-	e.scheduler = scheduler.NewDAGScheduler(poolSize, taskTimeout, tools, bus, sec)
+	e.scheduler = scheduler.NewDAGScheduler(poolSize, taskTimeout, tools, bus, sec, sandbox)
 	e.parser = NewParser(llm)
 	e.aggregator = NewAggregator(llm)
 	e.compressor = crabcontext.NewCompressor(100000)
@@ -188,16 +218,31 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 	totalToolCalls := 0
 
 	for round := 0; round < maxRounds; round++ {
-		stream, err := e.llm.StreamChat(ctx, history, &llm.ChatOptions{Tools: compactDefs})
+		// RAG: inject retrieved context from compressed history
+		callHistory := history
+		if e.memory != nil {
+			lastUser := lastUserMessage(history)
+			if ragCtx := e.memory.RetrieveContext(lastUser, 3); ragCtx != "" {
+				callHistory = injectRAGContext(history, ragCtx)
+			}
+		}
+		fmt.Print("\r\x1b[2m🦀 Thinking...\x1b[0m")
+		os.Stdout.Sync()
+		resp, err := e.llm.Chat(ctx, callHistory, &llm.ChatOptions{Tools: compactDefs})
+		fmt.Print("\r\x1b[K\n")
 		if err != nil {
 			e.session.Transition(SessionError)
-			return nil, fmt.Errorf("chat: LLM stream: %w", err)
+			return nil, fmt.Errorf("chat: LLM call: %w", err)
 		}
-
-		resp := consumeStream(stream)
 		if resp == nil {
 			e.session.Transition(SessionError)
-			return nil, fmt.Errorf("chat: empty stream response")
+			return nil, fmt.Errorf("chat: empty response")
+		}
+
+		// Display content if any
+		if resp.Content != "" {
+			fmt.Print(resp.Content)
+			fmt.Println()
 		}
 
 		// No tool calls — LLM is done, return response
@@ -261,26 +306,70 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 					continue
 				}
 			}
+			// Sandbox path validation for file-related tools
+			if e.sandbox != nil {
+				if path, ok := tc.Args["path"].(string); ok && path != "" {
+					if _, err := e.sandbox.ValidatePath(path); err != nil {
+						history = append(history, model.Message{
+							Role:       model.RoleTool,
+							Content:    fmt.Sprintf("sandbox: %s", err.Error()),
+							Name:       tc.Name,
+							ToolCallID: tc.ID,
+						})
+						continue
+					}
+				}
+			}
+
 			slot.color = toolColor(len(slots))
 			slot.label = fmt.Sprintf("[%d]", len(slots)+1)
 			slots = append(slots, slot)
 		}
 
-		// Show tool calls with color labels
-		fmt.Println()
-		for _, slot := range slots {
-			showToolCallColored(slot.tc, slot.color, slot.label)
-		}
+		// Tool calls shown with execution status
 
-		var wg sync.WaitGroup
-		for _, slot := range slots {
-			wg.Add(1)
-			go func(s *toolSlot) {
-				defer wg.Done()
-				s.res, s.err = s.exec.Execute(ctx, s.tc.Args)
-			}(slot)
-		}
-		wg.Wait()
+			var wg sync.WaitGroup
+			for _, slot := range slots {
+				wg.Add(1)
+				go func(s *toolSlot) {
+					defer wg.Done()
+					// PreTool hooks
+					if e.hooks != nil {
+						hctx := &hooks.Context{ToolName: s.tc.Name, ToolArgs: s.tc.Args}
+						results := e.hooks.Run(ctx, hooks.PreTool, hctx)
+						for _, r := range results {
+							if r.Blocked {
+								s.res = &model.TaskResult{Success: false, Error: r.Error}
+								return
+							}
+						}
+					}
+						startTime := time.Now()
+					s.res, s.err = s.exec.Execute(ctx, s.tc.Args)
+					elapsed := time.Since(startTime).Round(time.Millisecond)
+					status := "✓"
+					if s.err != nil || (s.res != nil && !s.res.Success) {
+						status = "✗"
+					}
+					fmt.Printf("  %s %s %s (%s)\x1b[0m\n", s.color+s.label+toolReset(), s.tc.Name, status, elapsed)
+					// PostTool hooks
+					if e.hooks != nil {
+						hctx := &hooks.Context{ToolName: s.tc.Name, ToolArgs: s.tc.Args}
+						if s.res != nil {
+							hctx.ToolResult = s.res.Output
+							hctx.ToolError = s.res.Error
+						}
+						e.hooks.Run(ctx, hooks.PostTool, hctx)
+					}
+				}(slot)
+			}
+			wg.Wait()
+
+			if resp.TotalTokens > 0 {
+				fmt.Printf("  \x1b[2mDone (%d calls · %d tokens)\x1b[0m\n", len(slots), resp.TotalTokens)
+			} else if len(slots) > 0 {
+				fmt.Printf("  \x1b[2mDone (%d calls)\x1b[0m\n", len(slots))
+			}
 
 		for _, slot := range slots {
 			if slot.err != nil || (slot.res != nil && !slot.res.Success) {
@@ -290,8 +379,6 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 				} else {
 					errMsg = truncateOutput(slot.err.Error(), 2048)
 				}
-				fmt.Printf("%s任务%s (failed)%s\n%s%s%s\n",
-					slot.color, slot.label, toolReset(), slot.color, errMsg, toolReset())
 				history = append(history, model.Message{
 					Role:       model.RoleTool,
 					Content:    errMsg,
@@ -299,11 +386,6 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 					ToolCallID: slot.tc.ID,
 				})
 			} else {
-				if slot.res.Output != "" {
-					fmt.Printf("%s%s%s\n%s%s%s\n",
-						slot.color, slot.label, toolReset(),
-						slot.color, slot.res.Output, toolReset())
-				}
 				history = append(history, model.Message{
 					Role:       model.RoleTool,
 					Content:    truncateOutput(slot.res.Output, 8192),
@@ -317,7 +399,15 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 		if e.compressor.ShouldCompress(history, 0.7) {
 			compressed, err := e.compressor.Compress(history)
 			if err == nil {
+				removed := len(history) - len(compressed)
 				history = compressed
+				if removed > 0 {
+					fmt.Printf("  \x1b[2mCompacted: %d earlier messages summarized to keep context within budget\x1b[0m\n", removed)
+				}
+				// Index compressed messages for RAG retrieval
+				if e.memory != nil {
+					e.memory.IndexCompressed(extractCompressedMessages(compressed))
+				}
 			}
 		}
 	}
@@ -332,79 +422,6 @@ func (e *engineImpl) ProcessChat(ctx context.Context, messages []model.Message) 
 
 func (e *engineImpl) ListTools() []model.ToolDefinition {
 	return e.tools.Definitions()
-}
-
-// consumeStream reads streamed chunks, displays content in real-time, and builds the full ChatResponse.
-func consumeStream(stream <-chan llm.ChatChunk) *llm.ChatResponse {
-	resp := &llm.ChatResponse{}
-	var tcArgsBuf strings.Builder
-	var currentTC *struct {
-		id   string
-		name string
-	}
-
-	first := true
-	for {
-		chunk, ok := <-stream
-		if !ok || chunk.Done {
-			break
-		}
-
-		// Start of new tool call (OpenAI-style: chunk carries ID + Name)
-		if chunk.ToolCallID != "" {
-			if currentTC != nil && tcArgsBuf.Len() > 0 {
-				resp.ToolCalls = append(resp.ToolCalls, parseToolCall(currentTC.id, currentTC.name, tcArgsBuf.String()))
-			}
-			currentTC = &struct {
-				id   string
-				name string
-			}{id: chunk.ToolCallID, name: chunk.ToolCallName}
-			tcArgsBuf.Reset()
-		}
-
-		// Tool call args fragment (may be Anthropic-style without prior ID/Name chunk)
-		if chunk.ToolCallArgs != "" {
-			if currentTC == nil {
-				currentTC = &struct {
-					id   string
-					name string
-				}{id: fmt.Sprintf("tc-%d", len(resp.ToolCalls)+1)}
-			}
-			tcArgsBuf.WriteString(chunk.ToolCallArgs)
-			continue
-		}
-
-		// Text content — display as it arrives
-		if chunk.Content != "" {
-			if first {
-				fmt.Print("\r                    \r")
-				first = false
-			}
-			fmt.Print(chunk.Content)
-			resp.Content += chunk.Content
-		}
-	}
-
-	// Finalize any pending tool call
-	if currentTC != nil && tcArgsBuf.Len() > 0 {
-		resp.ToolCalls = append(resp.ToolCalls, parseToolCall(currentTC.id, currentTC.name, tcArgsBuf.String()))
-	}
-
-	if !first {
-		fmt.Println()
-	}
-	return resp
-}
-
-func parseToolCall(id, name, rawArgs string) llm.ToolCall {
-	args := make(map[string]any)
-	if err := json.Unmarshal([]byte(rawArgs), &args); err != nil {
-		args["_raw"] = rawArgs
-	}
-	if name == "" && id != "" {
-		name = id
-	}
-	return llm.ToolCall{ID: id, Name: name, Args: args}
 }
 
 func (e *engineImpl) CancelRequest(ctx context.Context, requestID string) error {
@@ -429,48 +446,6 @@ func (e *engineImpl) Session() *Session {
 	return e.session
 }
 
-var totalTokensUsed int
-
-func showLLMResponse(resp *llm.ChatResponse, label string) {
-	info := ""
-	if resp.TotalTokens > 0 {
-		totalTokensUsed += resp.TotalTokens
-		info = fmt.Sprintf("(%d tok · %dk total)", resp.TotalTokens, totalTokensUsed/1000)
-	}
-	if resp.Reasoning != "" {
-		fmt.Printf("\n  %s [Thinking] %s\n", info, truncateText(resp.Reasoning, 300))
-		return
-	}
-	if resp.Content != "" && label != "" {
-		fmt.Printf("  %s %s: %s\n", info, label, truncateText(resp.Content, 500))
-	} else if resp.Content != "" {
-		fmt.Printf("  %s %s\n", info, truncateText(resp.Content, 500))
-	}
-}
-
-func showToolCall(tc llm.ToolCall) {
-	argStr := ""
-	for k, v := range tc.Args {
-		s := fmt.Sprintf("%v", v)
-		if len(s) > 40 {
-			s = s[:40] + "..."
-		}
-		argStr += fmt.Sprintf("%s=%s ", k, s)
-	}
-	fmt.Printf("    → %s(%s)\n", tc.Name, strings.TrimSpace(argStr))
-}
-
-func showToolCallColored(tc llm.ToolCall, color, label string) {
-	argStr := ""
-	for k, v := range tc.Args {
-		s := fmt.Sprintf("%v", v)
-		if len(s) > 40 {
-			s = s[:40] + "..."
-		}
-		argStr += fmt.Sprintf("%s=%s ", k, s)
-	}
-	fmt.Printf("  %s%s %s(%s)%s\n", color, label, tc.Name, strings.TrimSpace(argStr), toolReset())
-}
 
 func truncateOutput(s string, maxLen int) string {
 	if len(s) <= maxLen {
@@ -498,10 +473,27 @@ func promptUserApproval(name string, args map[string]any, decision security.Appr
 	return answer == "y" || answer == "Y" || answer == "yes"
 }
 
+// llmTools is the set of tools exposed to the LLM for direct invocation.
+// Agent-internal tools (task_*, mcp_*, agent, lsp, etc.) are excluded to keep
+// the tool schema compact and avoid confusing the model with irrelevant options.
+var llmTools = map[string]bool{
+	"read_file":  true,
+	"write_file": true,
+	"edit_file":  true,
+	"bash":       true,
+	"grep":       true,
+	"glob":       true,
+	"web_fetch":  true,
+	"web_search": true,
+}
+
 func buildCompactDefs(defs []model.ToolDefinition) []model.ToolDefinition {
-	compacts := make([]model.ToolDefinition, len(defs))
-	for i, d := range defs {
-		compacts[i] = model.ToolDefinition{
+	compacts := make([]model.ToolDefinition, 0, len(llmTools))
+	for _, d := range defs {
+		if !llmTools[d.Name] {
+			continue
+		}
+		c := model.ToolDefinition{
 			Name:        d.Name,
 			Description: d.Description,
 			Parameters: model.ParameterSchema{
@@ -511,13 +503,14 @@ func buildCompactDefs(defs []model.ToolDefinition) []model.ToolDefinition {
 			},
 		}
 		for k, v := range d.Parameters.Properties {
-			compacts[i].Parameters.Properties[k] = model.ParameterProperty{
+			c.Parameters.Properties[k] = model.ParameterProperty{
 				Type:        v.Type,
 				Description: v.Description,
-				Enum:        v.Enum,
-				Items:       v.Items,
+				Enum:  v.Enum,
+				Items: v.Items,
 			}
 		}
+		compacts = append(compacts, c)
 	}
 	return compacts
 }
@@ -530,4 +523,50 @@ func countFailed(tasks []*model.Task) int {
 		}
 	}
 	return n
+}
+
+// lastUserMessage returns the last user message content for RAG retrieval.
+func lastUserMessage(history []model.Message) string {
+	for i := len(history) - 1; i >= 0; i-- {
+		if history[i].Role == model.RoleUser {
+			return history[i].Content
+		}
+	}
+	return ""
+}
+
+// injectRAGContext prepends retrieved context as a system message.
+func injectRAGContext(history []model.Message, ragCtx string) []model.Message {
+	if ragCtx == "" {
+		return history
+	}
+	ragMsg := model.Message{
+		Role:    model.RoleSystem,
+		Content: ragCtx,
+	}
+	out := make([]model.Message, 0, len(history)+1)
+	// Insert after existing system messages
+	inserted := false
+	for _, m := range history {
+		out = append(out, m)
+		if !inserted && m.Role == model.RoleSystem {
+			out = append(out, ragMsg)
+			inserted = true
+		}
+	}
+	if !inserted {
+		out = append([]model.Message{ragMsg}, out...)
+	}
+	return out
+}
+
+// extractCompressedMessages collects message content for RAG indexing.
+func extractCompressedMessages(messages []model.Message) []string {
+	var out []string
+	for _, m := range messages {
+		if m.Content != "" && m.Role != model.RoleSystem {
+			out = append(out, m.Content)
+		}
+	}
+	return out
 }

@@ -66,7 +66,7 @@ func (e *EnterWorktreeExecutor) Validate(args map[string]any) error {
 func (e *EnterWorktreeExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "enter_worktree",
-		Description: "Create a new git worktree with a new branch. Use for isolated work on a separate branch.",
+		Description: "Create an isolated git worktree with a new branch.",
 		Parameters: model.ParameterSchema{
 			Type: "object",
 			Properties: map[string]model.ParameterProperty{
@@ -117,7 +117,7 @@ func (e *ExitWorktreeExecutor) Validate(args map[string]any) error { return nil 
 func (e *ExitWorktreeExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "exit_worktree",
-		Description: "Remove the current git worktree and return to the original directory.",
+		Description: "Remove a git worktree and return to original directory.",
 		Parameters: model.ParameterSchema{
 			Type:       "object",
 			Properties: map[string]model.ParameterProperty{},

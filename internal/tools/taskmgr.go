@@ -85,7 +85,7 @@ func (e *TaskCreateExecutor) Validate(args map[string]any) error {
 func (e *TaskCreateExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "task_create",
-		Description: "Create a new task in the task list.",
+		Description: "Create a new task.",
 		Parameters: model.ParameterSchema{
 			Type: "object",
 			Properties: map[string]model.ParameterProperty{
@@ -122,7 +122,7 @@ func (e *TaskListExecutor) Validate(args map[string]any) error { return nil }
 func (e *TaskListExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "task_list",
-		Description: "List all tasks in the task list.",
+		Description: "List all tasks.",
 		Parameters: model.ParameterSchema{
 			Type:       "object",
 			Properties: map[string]model.ParameterProperty{},
@@ -173,7 +173,7 @@ func (e *TaskUpdateExecutor) Validate(args map[string]any) error {
 func (e *TaskUpdateExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "task_update",
-		Description: "Update a task's status.",
+		Description: "Update task status.",
 		Parameters: model.ParameterSchema{
 			Type: "object",
 			Properties: map[string]model.ParameterProperty{
@@ -214,7 +214,7 @@ func (e *TaskGetExecutor) Validate(args map[string]any) error {
 func (e *TaskGetExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "task_get",
-		Description: "Get a task by ID.",
+		Description: "Get task details by ID.",
 		Parameters: model.ParameterSchema{
 			Type: "object",
 			Properties: map[string]model.ParameterProperty{
@@ -250,7 +250,7 @@ func (e *TaskStopExecutor) Validate(args map[string]any) error {
 func (e *TaskStopExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "task_stop",
-		Description: "Stop a running background task by its ID.",
+		Description: "Stop a background task by ID.",
 		Parameters: model.ParameterSchema{
 			Type: "object",
 			Properties: map[string]model.ParameterProperty{
@@ -291,7 +291,7 @@ func (e *TaskOutputExecutor) Validate(args map[string]any) error {
 func (e *TaskOutputExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "task_output",
-		Description: "Retrieve output from a running or completed background task.",
+		Description: "Get output from a background task.",
 		Parameters: model.ParameterSchema{
 			Type: "object",
 			Properties: map[string]model.ParameterProperty{

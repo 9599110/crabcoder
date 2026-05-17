@@ -83,7 +83,7 @@ func (e *TodoWriteExecutor) Validate(args map[string]any) error {
 func (e *TodoWriteExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "todo_write",
-		Description: "Create and manage a structured task list for your current coding session.",
+		Description: "Manage a structured task list.",
 		Parameters: model.ParameterSchema{
 			Type: "object",
 			Properties: map[string]model.ParameterProperty{

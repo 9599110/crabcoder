@@ -106,7 +106,7 @@ func (e *SkillExecutor) Validate(args map[string]any) error {
 func (e *SkillExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "skill",
-		Description: "Execute a skill within the main conversation. Skills provide specialized capabilities and domain knowledge.",
+		Description: "Execute a skill with specialized capabilities.",
 		Parameters: model.ParameterSchema{
 			Type: "object",
 			Properties: map[string]model.ParameterProperty{

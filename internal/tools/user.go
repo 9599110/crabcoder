@@ -76,7 +76,7 @@ func (e *AskUserQuestionExecutor) Validate(args map[string]any) error {
 func (e *AskUserQuestionExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "ask_user",
-		Description: "Ask the user questions and collect answers.",
+		Description: "Ask the user questions.",
 		Parameters: model.ParameterSchema{
 			Type: "object",
 			Properties: map[string]model.ParameterProperty{

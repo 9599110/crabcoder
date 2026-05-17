@@ -31,14 +31,15 @@ type AppConfig struct {
 }
 
 type ModelConfig struct {
-	RoutingMode string  `mapstructure:"routing_mode"`
-	Provider    string  `mapstructure:"provider"`
-	Model       string  `mapstructure:"model"`
-	APIKey      string  `mapstructure:"api_key"`
-	BaseURL     string  `mapstructure:"base_url"`
-	Temperature float64 `mapstructure:"temperature"`
-	MaxTokens   int     `mapstructure:"max_tokens"`
-	TopP        float64 `mapstructure:"top_p"`
+	RoutingMode    string  `mapstructure:"routing_mode"`
+	Provider       string  `mapstructure:"provider"`
+	Model          string  `mapstructure:"model"`
+	APIKey         string  `mapstructure:"api_key"`
+	BaseURL        string  `mapstructure:"base_url"`
+	EmbeddingModel string  `mapstructure:"embedding_model"`
+	Temperature    float64 `mapstructure:"temperature"`
+	MaxTokens      int     `mapstructure:"max_tokens"`
+	TopP           float64 `mapstructure:"top_p"`
 }
 
 type OllamaConfig struct {
@@ -50,16 +51,45 @@ type SecurityConfig struct {
 	Mode            string   `mapstructure:"mode"`
 	AllowedPaths    []string `mapstructure:"allowed_paths"`
 	AllowedCommands []string `mapstructure:"allowed_commands"`
+	AllowRules      []string `mapstructure:"allow_rules"`
+	DenyRules       []string `mapstructure:"deny_rules"`
+	AskRules        []string `mapstructure:"ask_rules"`
 }
 
 type ToolsConfig struct {
-	Shell   ShellConfig   `mapstructure:"shell"`
-	Sandbox SandboxConfig `mapstructure:"sandbox"`
+	Shell      ShellConfig              `mapstructure:"shell"`
+	Sandbox    SandboxConfig            `mapstructure:"sandbox"`
+	MCPServers []MCPServerConfig        `mapstructure:"mcp_servers"`
+	Hooks      []HookConfig             `mapstructure:"hooks"`
+	Plugins    []PluginConfig           `mapstructure:"plugins"`
+}
+
+type PluginConfig struct {
+	Name    string   `json:"name"`
+	Command string   `json:"command"`
+	Args    []string `json:"args"`
+	Env     []string `json:"env"`
+	Enabled bool     `json:"enabled"`
+}
+
+type HookConfig struct {
+	Name    string   `json:"name"`
+	Command string   `json:"command"`
+	Events  []string `json:"events"`
+	Enabled bool     `json:"enabled"`
 }
 
 type ShellConfig struct {
 	Timeout   int `mapstructure:"timeout"`
 	MaxOutput int `mapstructure:"max_output"`
+}
+
+type MCPServerConfig struct {
+	Name    string   `mapstructure:"name"`
+	Command string   `mapstructure:"command"`
+	Args    []string `mapstructure:"args"`
+	Env     []string `mapstructure:"env"`
+	Enabled bool     `mapstructure:"enabled"`
 }
 
 type SandboxConfig struct {
@@ -144,6 +174,14 @@ func DefaultConfig() *Config {
 				Enabled:    true,
 				Network:    false,
 				Filesystem: "workspace",
+			},
+			MCPServers: []MCPServerConfig{
+				{
+					Name:    "filesystem",
+					Command: "npx",
+					Args:    []string{"-y", "@modelcontextprotocol/server-filesystem", "."},
+					Enabled: false,
+				},
 			},
 		},
 		Logging: LoggingConfig{
@@ -235,8 +273,12 @@ type settingsFile struct {
 	ProviderFallbacks *providerFallbackCfg `json:"providerFallbacks"`
 	Model             string               `json:"model"`
 	Security          *struct {
-		Mode string `json:"mode"`
+		Mode  string   `json:"mode"`
+		Allow []string `json:"allow"`
+		Deny  []string `json:"deny"`
+		Ask   []string `json:"ask"`
 	} `json:"security"`
+	MCPServers []MCPServerConfig `json:"mcp_servers"`
 }
 
 type providerFallbackCfg struct {
@@ -281,9 +323,25 @@ func mergeJSONConfig(path string, cfg *Config) error {
 		cfg.Model.Model = sf.Model
 	}
 
-	// Security mode override
-	if sf.Security != nil && sf.Security.Mode != "" {
-		cfg.Security.Mode = sf.Security.Mode
+	// Security mode override + rules
+	if sf.Security != nil {
+		if sf.Security.Mode != "" {
+			cfg.Security.Mode = sf.Security.Mode
+		}
+		if len(sf.Security.Allow) > 0 {
+			cfg.Security.AllowRules = append(cfg.Security.AllowRules, sf.Security.Allow...)
+		}
+		if len(sf.Security.Deny) > 0 {
+			cfg.Security.DenyRules = append(cfg.Security.DenyRules, sf.Security.Deny...)
+		}
+		if len(sf.Security.Ask) > 0 {
+			cfg.Security.AskRules = append(cfg.Security.AskRules, sf.Security.Ask...)
+		}
+	}
+
+	// Merge MCP servers (user config replaces project config)
+	if len(sf.MCPServers) > 0 {
+		cfg.Tools.MCPServers = sf.MCPServers
 	}
 
 	return nil

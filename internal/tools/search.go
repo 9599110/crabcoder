@@ -39,7 +39,7 @@ func (e *GrepExecutor) Validate(args map[string]any) error {
 func (e *GrepExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "grep",
-		Description: "Search code for a pattern using grep",
+		Description: "Search for a pattern in files.",
 		Parameters: model.ParameterSchema{
 			Type: "object",
 			Properties: map[string]model.ParameterProperty{
@@ -81,7 +81,7 @@ func (e *GlobExecutor) Validate(args map[string]any) error {
 func (e *GlobExecutor) GetDefinition() model.ToolDefinition {
 	return model.ToolDefinition{
 		Name:        "glob",
-		Description: "Find files matching a glob pattern",
+		Description: "Find files by glob pattern.",
 		Parameters: model.ParameterSchema{
 			Type: "object",
 			Properties: map[string]model.ParameterProperty{

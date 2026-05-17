@@ -9,48 +9,44 @@ import (
 	"github.com/crabcoder/crabcoder/pkg/config"
 )
 
-// HealthState tracks the health of a running task.
-type HealthState struct {
-	TaskID         string
-	StartedAt      time.Time
-	LastChunkAt    time.Time
-	LastOutputAt   time.Time
-	LLMIdle        bool
-	ToolOutputIdle bool
-	mu             sync.Mutex
+// TaskState tracks the complete health of a single task.
+type TaskState struct {
+	TaskID    string
+	Heartbeat *Heartbeat
+	Output    *OutputTracker
 }
 
-// Watcher monitors task health and detects stalls.
+// Watcher monitors task health and detects stalls across LLM and tool execution.
 type Watcher struct {
-	cfg    *config.TimeoutConfig
-	bus    *event.Bus
-	tasks  map[string]*HealthState
-	mu     sync.RWMutex
-	cancel context.CancelFunc
+	cfg      *config.TimeoutConfig
+	bus      *event.Bus
+	tasks    map[string]*TaskState
+	dagTimer *DAGTimer
+	mu       sync.RWMutex
+	cancel   context.CancelFunc
 }
 
 // New creates a new Watchdog watcher.
 func New(cfg *config.TimeoutConfig, bus *event.Bus) *Watcher {
 	return &Watcher{
-		cfg:   cfg,
-		bus:   bus,
-		tasks: make(map[string]*HealthState),
+		cfg:      cfg,
+		bus:      bus,
+		tasks:    make(map[string]*TaskState),
+		dagTimer: newDAGTimer(cfg),
 	}
 }
 
 // RegisterTask adds a task to the watchdog monitor.
-func (w *Watcher) RegisterTask(taskID string) *HealthState {
+func (w *Watcher) RegisterTask(taskID string) *TaskState {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	now := time.Now()
-	hs := &HealthState{
-		TaskID:       taskID,
-		StartedAt:    now,
-		LastChunkAt:  now,
-		LastOutputAt: now,
+	ts := &TaskState{
+		TaskID:    taskID,
+		Heartbeat: newHeartbeat(taskID),
+		Output:    newOutputTracker(taskID),
 	}
-	w.tasks[taskID] = hs
-	return hs
+	w.tasks[taskID] = ts
+	return ts
 }
 
 // UnregisterTask removes a task from monitoring.
@@ -58,22 +54,6 @@ func (w *Watcher) UnregisterTask(taskID string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	delete(w.tasks, taskID)
-}
-
-// Heartbeat updates the LLM chunk timestamp (prevents LLM idle detection).
-func (hs *HealthState) Heartbeat() {
-	hs.mu.Lock()
-	hs.LastChunkAt = time.Now()
-	hs.LLMIdle = false
-	hs.mu.Unlock()
-}
-
-// OutputHeartbeat updates the tool output timestamp.
-func (hs *HealthState) OutputHeartbeat() {
-	hs.mu.Lock()
-	hs.LastOutputAt = time.Now()
-	hs.ToolOutputIdle = false
-	hs.mu.Unlock()
 }
 
 // Start begins the watchdog check loop. Returns when ctx is cancelled.
@@ -89,7 +69,7 @@ func (w *Watcher) Start(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			w.checkAll(ctx)
+			w.checkAll()
 		}
 	}
 }
@@ -102,80 +82,23 @@ func (w *Watcher) Stop() {
 }
 
 // checkAll iterates all registered tasks and checks for stalls.
-func (w *Watcher) checkAll(ctx context.Context) {
+func (w *Watcher) checkAll() {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
-	for _, hs := range w.tasks {
-		w.checkTask(ctx, hs)
-	}
-}
-
-func (w *Watcher) checkTask(ctx context.Context, hs *HealthState) {
-	hs.mu.Lock()
-	defer hs.mu.Unlock()
-
-	now := time.Now()
-
-	// LLM idle check
-	llmIdleTime := now.Sub(hs.LastChunkAt)
-	if llmIdleTime > w.cfg.LLM.StreamIdle && !hs.LLMIdle {
-		hs.LLMIdle = true
-		if w.bus != nil {
-			w.bus.Publish(event.Event{
-				Type: event.ProgressUpdate,
-				Data: map[string]any{
-					"task_id": hs.TaskID,
-					"message": "LLM 流式传输空闲 " + llmIdleTime.Round(time.Second).String(),
-					"level":   "warn",
-				},
-			})
-		}
+	for _, ts := range w.tasks {
+		ts.Heartbeat.CheckLLMIdle(w.cfg, w.bus)
+		ts.Heartbeat.CheckLLMHardTimeout(w.cfg, w.bus)
+		ts.Output.CheckOutputIdle(w.cfg, w.bus)
+		ts.Output.CheckToolHardTimeout(w.cfg, w.bus)
 	}
 
-	// LLM hard timeout check
-	if now.Sub(hs.StartedAt) > w.cfg.LLM.HardTimeout {
-		if w.bus != nil {
-			w.bus.Publish(event.Event{
-				Type: event.TaskFailed,
-				Data: map[string]any{
-					"task_id": hs.TaskID,
-					"error":   "LLM 调用硬超时 (" + w.cfg.LLM.HardTimeout.String() + ")",
-					"reason":  "llm_timeout",
-				},
-			})
-		}
+	// DAG global timeout
+	taskIDs := make([]string, 0, len(w.tasks))
+	for id := range w.tasks {
+		taskIDs = append(taskIDs, id)
 	}
-
-	// Tool output idle check
-	toolIdleTime := now.Sub(hs.LastOutputAt)
-	if toolIdleTime > w.cfg.Tool.OutputIdle && !hs.ToolOutputIdle {
-		hs.ToolOutputIdle = true
-		if w.bus != nil {
-			w.bus.Publish(event.Event{
-				Type: event.ProgressUpdate,
-				Data: map[string]any{
-					"task_id": hs.TaskID,
-					"message": "工具输出空闲 " + toolIdleTime.Round(time.Second).String(),
-					"level":   "warn",
-				},
-			})
-		}
-	}
-
-	// Tool hard timeout check
-	if now.Sub(hs.StartedAt) > w.cfg.Tool.HardTimeout {
-		if w.bus != nil {
-			w.bus.Publish(event.Event{
-				Type: event.TaskFailed,
-				Data: map[string]any{
-					"task_id": hs.TaskID,
-					"error":   "工具执行硬超时 (" + w.cfg.Tool.HardTimeout.String() + ")",
-					"reason":  "tool_timeout",
-				},
-			})
-		}
-	}
+	w.dagTimer.CheckGlobalTimeout(taskIDs, w.bus)
 }
 
 // ActiveTasks returns the count of monitored tasks.

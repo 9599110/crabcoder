@@ -21,5 +21,27 @@ func slashCompleter(d prompt.Document) []prompt.Suggest {
 			})
 		}
 	}
+
+	// Model name completions after /model
+	if after, ok := strings.CutPrefix(text, "/model "); ok {
+		for _, m := range knownModels {
+			if strings.HasPrefix(m, after) {
+				s = append(s, prompt.Suggest{
+					Text:        m,
+					Description: "switch to " + m,
+				})
+			}
+		}
+	}
 	return s
+}
+
+var knownModels = []string{
+	"claude-sonnet-4-6",
+	"claude-opus-4-7",
+	"claude-haiku-4-5",
+	"deepseek-chat",
+	"deepseek-reasoner",
+	"gpt-4o",
+	"gpt-4o-mini",
 }
