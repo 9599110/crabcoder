@@ -215,11 +215,27 @@ func runChat(cmd *cobra.Command, args []string) error {
 			fmt.Println(initProject())
 			continue
 		}
+		if input == "/help" {
+			showSlashHelp("/")
+			continue
+		}
 		if len(input) > 0 && input[0] == '/' {
-			// Debug: write to file AND stderr to confirm this code runs
-			os.WriteFile("/tmp/crab-slash.log", []byte(fmt.Sprintf("input=%q\n", input)), 0644)
-			fmt.Fprintln(os.Stderr, "\n[SLASH DETECTED]", input)
-			showSlashHelp(input)
+			prefix := strings.TrimPrefix(input, "/")
+			cmd := interactiveSlash(prefix)
+			if cmd == "" {
+				continue
+			}
+			if cmd == "/exit" || cmd == "/quit" {
+				break
+			}
+			if cmd == "/init" {
+				fmt.Println(initProject())
+				continue
+			}
+			if cmd == "/help" {
+				showSlashHelp("/")
+				continue
+			}
 			continue
 		}
 
