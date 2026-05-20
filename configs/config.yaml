@@ -1,0 +1,87 @@
+# CrabCoder 配置文件
+
+app:
+  name: CrabCoder
+  version: 1.0.0
+
+# AI 模型配置
+model:
+  provider: anthropic
+  model: claude-sonnet-4-20250514
+  api_key: ${ANTHROPIC_API_KEY}
+  base_url: https://api.anthropic.com
+  max_tokens: 8192
+  timeout: 120s
+
+# 权限配置
+permission:
+  mode: default  # default, plan, bypass, yolo
+  rules:
+    - source: user
+      pattern: "bash:rm -rf *"
+      action: deny
+    - source: user
+      pattern: "bash:git push"
+      action: ask
+  always_allow:
+    - read
+    - glob
+    - grep
+    - web_search
+  always_deny:
+    - bash:rm -rf /
+
+# MCP 服务器配置
+mcp:
+  servers:
+    - name: filesystem
+      command:
+        - npx
+        - -y
+        - "@modelcontextprotocol/server-filesystem"
+        - "/home/user/projects"
+      transport: stdio
+
+# 终端配置
+terminal:
+  theme: default  # default, dark, light
+  font_size: 14
+  history_size: 1000
+
+# 工具配置
+tools:
+  bash:
+    timeout: 30s
+    allowed_commands:
+      - git
+      - npm
+      - node
+      - cargo
+  file:
+    max_size: 10485760  # 10MB
+    allowed_extensions:
+      - .go
+      - .ts
+      - .tsx
+      - .py
+      - .rs
+      - .md
+      - .yaml
+      - .json
+
+# 桥接配置
+bridge:
+  enabled: false
+  type: uds  # uds, websocket
+  socket_path: /tmp/crabcoder.sock
+
+# 插件配置
+plugin:
+  dir: ~/.crabcoder/plugins
+  auto_load: true
+
+# 日志配置
+logging:
+  level: info  # debug, info, warn, error
+  format: text  # text, json
+  output: stdout

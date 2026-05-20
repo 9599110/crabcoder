@@ -1,0 +1,191 @@
+# TDD-Driven Schema
+# 用于生成 TDD 开发流程所需的 artifact
+
+name: tdd-driven-v2
+version: 1.0
+description: |
+  TDD 驱动开发的 Schema，生成完整的 proposal → spec → design → tasks → plan 文档链。
+  适用于需要严格测试驱动开发的功能模块。
+
+# Artifact 定义顺序（按执行顺序）
+artifacts:
+  - id: tdd-proposal
+    generates: proposal
+    name: proposal
+    description: 变更提案 - 描述问题和可测试行为
+    template: templates/proposal.md
+    instruction: |
+      ## Proposal 生成规则
+
+      ### Problem 段落
+      - 描述要解决的核心问题
+      - 说明当前状态和期望状态
+      - 限制范围（Scope）
+
+      ### Testable Behaviors 段落
+      - 使用 WHEN/THEN 格式
+      - 每个行为必须是可测试的
+      - 包含正常路径和边界情况
+      - 示例格式：
+        ```
+        WHEN [触发条件]
+        THEN [期望结果]
+        ```
+
+      ### Acceptance Criteria 段落
+      - 对应 proposal 中的每个 WHEN/THEN
+      - 可量化、可验证
+      - 示例：
+        ```
+        - [ ] proposal.md 包含至少 N 个 WHEN/THEN 行为
+        - [ ] spec.md 覆盖所有 scenario
+        - [ ] tasks.md 包含 N 个原子化 task
+        ```
+
+  - id: tdd-spec
+    generates: spec
+    name: spec
+    description: 行为规格 - GIVEN/WHEN/THEN 场景
+    template: templates/spec.md
+    instruction: |
+      ## Spec 生成规则
+
+      ### Scenario 格式
+      每个 scenario 必须包含：
+      - GIVEN: 前置条件（Setup）
+      - WHEN: 用户操作或触发事件
+      - THEN: 期望的系统响应
+
+      ### Scenario 覆盖要求
+      - 必须覆盖所有 proposal 中的 WHEN/THEN 行为
+      - 包含正常路径场景
+      - 包含边界条件和错误处理场景
+      - 包含空值和极端值场景
+
+      ### 非功能性需求场景（必须覆盖）
+
+      #### 性能测试场景
+      - 冷启动时间测试（<500ms）
+      - 内存占用测试（<100MB）
+      - 响应延迟测试（<100ms）
+
+      #### 可靠性测试场景
+      - API 错误重试测试（3次重试）
+      - 熔断器触发/恢复测试
+      - 网络超时处理测试
+
+      #### 安全性测试场景
+      - 密钥存储安全测试
+      - 命令审计日志测试
+      - 敏感信息不泄露测试
+
+      #### 兼容性测试场景
+      - 多平台路径处理测试
+      - 跨平台换行符处理测试
+      - 环境变量读取测试
+
+  - id: tdd-design
+    generates: design
+    name: design
+    description: 技术设计 - 文件结构和测试策略
+    template: templates/design.md
+    instruction: |
+      ## Design 生成规则
+
+      ### File Structure
+      - 列出所有需要创建/修改的文件
+      - 包含源码文件和测试文件
+      - 使用相对路径
+      - 标注文件用途
+
+      ### Test Strategy
+      - 为每个测试文件定义策略
+      - 说明测试范围和边界
+      - 定义 mock/stub 策略
+      - 覆盖率目标
+
+      ### 非功能性测试设计
+
+      #### 性能测试文件
+      ```
+      pkg/benchmarks/
+      ├── [module]_bench_test.go    # 性能基准测试
+      └── [module]_mem_test.go     # 内存分析测试
+      ```
+
+      #### 可靠性测试文件
+      ```
+      pkg/[module]/
+      ├── [module]_retry_test.go   # 重试机制测试
+      └── [module]_circuit_test.go # 熔断器测试
+      ```
+
+      #### 安全测试文件
+      ```
+      pkg/security/
+      ├── keychain_test.go         # 密钥存储测试
+      └── audit_test.go            # 审计日志测试
+      ```
+
+  - id: tdd-tasks
+    generates: tasks
+    name: tasks
+    description: 原子化 TDD 任务列表
+    template: templates/tasks.md
+    instruction: |
+      ## Tasks 生成规则（关键约束）
+
+      ### 原子化约束
+      - 每个 task 只能包含一个 TDD 阶段（RED 或 GREEN 或 REFACTOR）
+      - 禁止合并 task，如 "RED+GREEN: 写测试并实现"
+      - RED 和 GREEN 必须严格交替
+
+      ### Task 格式
+      ```markdown
+      ### [Feature name]
+
+      - [ ] RED: [描述]
+      - [ ] GREEN: [描述]
+      - [ ] REFACTOR: [描述，可选]
+      ```
+
+      ### Task 拆分原则
+      如果一个功能点需要：
+      1. 添加新字段 → RED + GREEN
+      2. 添加新方法 → RED + GREEN
+      3. 添加新模块 → RED + GREEN + REFACTOR
+
+      ### 常见拆分模式
+      - "添加 X 功能" → [X] RED → [X] GREEN
+      - "添加 Y 并集成到 Z" → [Y] RED → [Y] GREEN → [Z+Integration] RED → [Z+Integration] GREEN
+
+  - id: tdd-plan
+    generates: plan
+    name: plan
+    description: 执行计划 - 每步映射到具体 task
+    template: templates/plan.md
+    instruction: |
+      ## Plan 生成规则
+
+      ### Step 格式
+      ```markdown
+      ### Step N: RED — [description]
+      - Test file: [path]
+      - Assertion: [what to test]
+      - Expected failure: [reason]
+      - Verify: [test command]
+      ```
+
+      ### Step 映射
+      - 每个 step 对应 tasks.md 中的一个 task
+      - 包含具体的测试文件和断言
+      - 说明预期失败原因
+
+      ### Execution Mode Selection
+      末尾必须包含执行模式选择：
+      ```markdown
+      ## Execution Mode Selection
+
+      - [ ] **subagent-driven-development**: 推荐用于复杂功能，流程纪律严格
+      - [ ] **inline-development**: 适用于简单功能，快速实现
+      ```

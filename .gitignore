@@ -1,6 +1,5 @@
-# Project local settings
-.project/
-.local/
+# Build output
+/build/
 
 # IDE
 .idea/
@@ -8,50 +7,15 @@
 *.swp
 *.swo
 
-# Build output
-bin/
-cli
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-
-# Test binary
-*.test
-
-# Output of go coverage
-*.out
-
-# Go workspace
-go.work
-go.work.sum
-
-# Dependencies
-vendor/
-
-# Config (local overrides)
-.crabcoder/
-*.local.json
-*.local.yaml
-settings.local.json
-
-# Sensitive
-.env
-.env.*
-*.key
-*.pem
-
-# Go build artifacts
-*.prof
-*.coverprofile
-coverage.out
-__debug_bin*
-
 # OS
 .DS_Store
 Thumbs.db
 
-# CrabCoder local artifacts
-.crabcoder/settings.local.json
-.crabcoder/sessions/
+# Go
+*.test
+*.out
+coverage.html
+
+# Config (contains secrets)
+.crabcoder.yaml
+settings.json

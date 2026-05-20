@@ -1,0 +1,77 @@
+# OpenSpec 配置文件
+# 用于定义 OpenSpec 工具的行为和默认配置
+
+version: "1.0"
+
+# 工具配置
+tools:
+  # Schema 管理
+  schema:
+    default_schema: tdd-driven-v2
+    search_paths:
+      - openspec/schemas
+      - ~/.crabcoder/openspec/schemas
+
+  # Artifact 生成
+  generator:
+    template_engine: markdown
+    output_format: markdown
+    preserve_comments: true
+
+  # 验证配置
+  validator:
+    strict_mode: false
+    allow_unknown_fields: true
+
+# 默认上下文配置
+context:
+  # 项目信息
+  project:
+    name: CrabCoder
+    type: CLI tool
+    language: Go
+    framework: bubble tea, lipgloss, cobra
+    testing: go test, testify
+
+  # 技术栈详情
+  tech_stack:
+    runtime: Go 1.21+
+    ui_framework: Bubble Tea (charm.sh)
+    styling: Lipgloss
+    cli_framework: Cobra
+    http_client: net/http, net/rpc
+    serialization: JSON, YAML
+
+  # 代码规范
+  coding_standards:
+    gofmt: true
+    golint: true
+    govet: true
+    test_coverage_min: 80
+    critical_coverage_min: 100
+
+  # 工具函数列表
+  existing_tools:
+    - pkg/tools/tool.go: Tool 接口定义
+    - pkg/tools/base/read.go: ReadFileTool 实现
+    - pkg/tools/exec/bash.go: BashTool 实现
+    - pkg/core/app/app.go: App 结构体
+    - pkg/core/bus/bus.go: MessageBus 实现
+
+  # 已有类型定义
+  existing_types:
+    - pkg/core/app/errors.go: 错误类型定义
+    - pkg/core/state/state.go: State 管理
+    - pkg/tools/tool.go: Tool, ToolResult 接口
+
+  # 约束规则
+  constraints:
+    file_operations:
+      max_file_size: 10485760  # 10MB
+      allowed_extensions: [.go, .yaml, .yml, .json, .md, .txt]
+    command_execution:
+      timeout_default: 30s
+      allowed_commands: [git, go, npm, node, make]
+      denied_patterns:
+        - "rm -rf /"
+        - "DROP DATABASE"
